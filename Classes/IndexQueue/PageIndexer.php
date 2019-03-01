@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,8 +26,9 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
 
 use ApacheSolrForTypo3\Solr\Access\Rootline;
 use ApacheSolrForTypo3\Solr\Access\RootlineElement;
+use ApacheSolrForTypo3\Solr\Domain\Index\PageIndexer\Helper\UriBuilder\AbstractUriStrategy;
+use ApacheSolrForTypo3\Solr\Domain\Index\PageIndexer\Helper\UriStrategyFactory;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -58,8 +59,7 @@ class PageIndexer extends Indexer
 
         $solrConnections = $this->getSolrConnectionsByItem($item);
         foreach ($solrConnections as $systemLanguageUid => $solrConnection) {
-            $contentAccessGroups = $this->getAccessGroupsFromContent($item,
-                $systemLanguageUid);
+            $contentAccessGroups = $this->getAccessGroupsFromContent($item, $systemLanguageUid);
 
             if (empty($contentAccessGroups)) {
                 // might be an empty page w/no content elements or some TYPO3 error / bug
@@ -106,7 +106,7 @@ class PageIndexer extends Indexer
      * for translations of a page.
      *
      * @param Item $item An index queue item
-     * @return array An array of ApacheSolrForTypo3\Solr\SolrService connections, the array's keys are the sys_language_uid of the language of the connection
+     * @return array An array of ApacheSolrForTypo3\Solr\System\Solr\SolrConnection connections, the array's keys are the sys_language_uid of the language of the connection
      */
     protected function getSolrConnectionsByItem(Item $item)
     {
@@ -125,13 +125,7 @@ class PageIndexer extends Indexer
                 $accessibleSolrConnections[0] = $solrConnections[0];
             }
 
-            $translationOverlays = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-                'pid, sys_language_uid',
-                'pages_language_overlay',
-                'pid = ' . $page['uid']
-                . BackendUtility::deleteClause('pages_language_overlay')
-                . BackendUtility::BEenableFields('pages_language_overlay')
-            );
+            $translationOverlays = $this->pagesRepository->findTranslationOverlaysByPageId((int)$page['uid']);
 
             foreach ($translationOverlays as $overlay) {
                 $languageId = $overlay['sys_language_uid'];
@@ -202,7 +196,7 @@ class PageIndexer extends Indexer
      */
     protected function buildBasePageIndexerRequest()
     {
-        $request = GeneralUtility::makeInstance(PageIndexerRequest::class);
+        $request = $this->getPageIndexerRequest();
         $request->setParameter('loggingEnabled', $this->loggingEnabled);
 
         if (!empty($this->options['authorization.'])) {
@@ -226,6 +220,14 @@ class PageIndexer extends Indexer
     }
 
     /**
+     * @return PageIndexerRequest
+     */
+    protected function getPageIndexerRequest()
+    {
+        return GeneralUtility::makeInstance(PageIndexerRequest::class);
+    }
+
+    /**
      * Determines a page ID's URL.
      *
      * Tries to find a domain record to use to build an URL for a given page ID
@@ -238,83 +240,21 @@ class PageIndexer extends Indexer
      */
     protected function getDataUrl(Item $item, $language = 0)
     {
-        $scheme = 'http';
-        $host = $item->getSite()->getDomain();
-        $path = '/';
         $pageId = $item->getRecordUid();
-
-        // deprecated
-        if (!empty($this->options['scheme'])) {
-            $this->logger->log(
-                SolrLogManager::INFO,
-                'Using deprecated option "scheme" to set the scheme (http / https) for the page indexer frontend helper. Use plugin.tx_solr.index.queue.pages.indexer.frontendDataHelper.scheme instead'
-            );
-            $scheme = $this->options['scheme'];
-        }
-
-        // check whether we should use ssl / https
-        if (!empty($this->options['frontendDataHelper.']['scheme'])) {
-            $scheme = $this->options['frontendDataHelper.']['scheme'];
-        }
-
-        // overwriting the host
-        if (!empty($this->options['frontendDataHelper.']['host'])) {
-            $host = $this->options['frontendDataHelper.']['host'];
-        }
-
-        // setting a path if TYPO3 is installed in a sub directory
-        if (!empty($this->options['frontendDataHelper.']['path'])) {
-            $path = $this->options['frontendDataHelper.']['path'];
-        }
-
+        $strategy = $this->getUriStrategy($pageId);
         $mountPointParameter = $this->getMountPageDataUrlParameter($item);
-        $dataUrl = $scheme . '://' . $host . $path . 'index.php?id=' . $pageId;
-        $dataUrl .= ($mountPointParameter !== '') ? '&MP=' . $mountPointParameter : '';
-        $dataUrl .= '&L=' . $language;
-
-        if (!GeneralUtility::isValidUrl($dataUrl)) {
-            $this->logger->log(
-                SolrLogManager::ERROR,
-                'Could not create a valid URL to get frontend data while trying to index a page.',
-                [
-                    'item' => (array)$item,
-                    'constructed URL' => $dataUrl,
-                    'scheme' => $scheme,
-                    'host' => $host,
-                    'path' => $path,
-                    'page ID' => $pageId,
-                    'indexer options' => $this->options
-                ]
-            );
-
-            throw new \RuntimeException(
-                'Could not create a valid URL to get frontend data while trying to index a page. Created URL: ' . $dataUrl,
-                1311080805
-            );
-        }
-
-        if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['IndexQueuePageIndexer']['dataUrlModifier']) {
-            $dataUrlModifier = GeneralUtility::getUserObj($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['IndexQueuePageIndexer']['dataUrlModifier']);
-
-            if ($dataUrlModifier instanceof PageIndexerDataUrlModifier) {
-                $dataUrl = $dataUrlModifier->modifyDataUrl($dataUrl, [
-                    'item' => $item,
-                    'scheme' => $scheme,
-                    'host' => $host,
-                    'path' => $path,
-                    'pageId' => $pageId,
-                    'language' => $language
-                ]);
-            } else {
-                throw new \RuntimeException(
-                    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['IndexQueuePageIndexer']['dataUrlModifier']
-                    . ' is not an implementation of ApacheSolrForTypo3\Solr\IndexQueue\PageIndexerDataUrlModifier',
-                    1290523345
-                );
-            }
-        }
+        $dataUrl = $strategy->getPageIndexingUriFromPageItemAndLanguageId($item, $language, $mountPointParameter, $this->options);
 
         return $dataUrl;
+    }
+
+    /**
+     * @param int $pageId
+     * @return AbstractUriStrategy
+     */
+    protected function getUriStrategy($pageId)
+    {
+        return GeneralUtility::makeInstance(UriStrategyFactory::class)->getForPageId($pageId);
     }
 
     /**
@@ -326,16 +266,11 @@ class PageIndexer extends Indexer
      */
     protected function getMountPageDataUrlParameter(Item $item)
     {
-        $mountPageUrlParameter = '';
-
-        if ($item->hasIndexingProperty('isMountedPage')) {
-            $mountPageUrlParameter =
-                $item->getIndexingProperty('mountPageSource')
-                . '-'
-                . $item->getIndexingProperty('mountPageDestination');
+        if (!$item->hasIndexingProperty('isMountedPage')) {
+            return '';
         }
 
-        return $mountPageUrlParameter;
+        return $item->getIndexingProperty('mountPageSource') . '-' . $item->getIndexingProperty('mountPageDestination');
     }
 
     #
@@ -354,9 +289,7 @@ class PageIndexer extends Indexer
      */
     protected function indexPage(Item $item, $language = 0, $userGroup = 0)
     {
-        $accessRootline = $this->getAccessRootline($item, $language,
-            $userGroup);
-
+        $accessRootline = $this->getAccessRootline($item, $language, $userGroup);
         $request = $this->buildBasePageIndexerRequest();
         $request->setIndexQueueItem($item);
         $request->addAction('indexPage');
@@ -390,10 +323,9 @@ class PageIndexer extends Indexer
         }
 
         if (!$indexActionResult['pageIndexed']) {
-            throw new \RuntimeException(
-                'Failed indexing page Index Queue item ' . $item->getIndexQueueUid(),
-                1331837081
-            );
+            $message = 'Failed indexing page Index Queue item: ' . $item->getIndexQueueUid() . ' url: ' . $indexRequestUrl;
+
+            throw new \RuntimeException($message, 1331837081);
         }
 
         return $response;
@@ -423,11 +355,8 @@ class PageIndexer extends Indexer
      * @param int $contentAccessGroup The user group to use for the content access rootline element. Optional, will be determined automatically if not set.
      * @return string An Access Rootline.
      */
-    protected function getAccessRootline(
-        Item $item,
-        $language = 0,
-        $contentAccessGroup = null
-    ) {
+    protected function getAccessRootline(Item $item, $language = 0, $contentAccessGroup = null)
+    {
         static $accessRootlineCache;
 
         $mountPointParameter = $this->getMountPageDataUrlParameter($item);
@@ -441,22 +370,31 @@ class PageIndexer extends Indexer
         }
 
         if (!isset($accessRootlineCache[$accessRootlineCacheEntryId])) {
-            $accessRootline = Rootline::getAccessRootlineByPageId(
-                $item->getRecordUid(),
-                $mountPointParameter
-            );
+            $accessRootline = $this->getAccessRootlineByPageId($item->getRecordUid(), $mountPointParameter);
 
             // current page's content access groups
             $contentAccessGroups = [$contentAccessGroup];
             if (is_null($contentAccessGroup)) {
                 $contentAccessGroups = $this->getAccessGroupsFromContent($item, $language);
             }
-            $element = GeneralUtility::makeInstance(RootlineElement::class, 'c:' . implode(',', $contentAccessGroups));
+            $element = GeneralUtility::makeInstance(RootlineElement::class, /** @scrutinizer ignore-type */ 'c:' . implode(',', $contentAccessGroups));
             $accessRootline->push($element);
 
             $accessRootlineCache[$accessRootlineCacheEntryId] = $accessRootline;
         }
 
         return $accessRootlineCache[$accessRootlineCacheEntryId];
+    }
+
+    /**
+     * Returns the access rootLine for a certain pageId.
+     *
+     * @param int $pageId
+     * @param string $mountPointparameter
+     * @return Rootline
+     */
+    protected function getAccessRootlineByPageId($pageId, $mountPointParameter)
+    {
+        return Rootline::getAccessRootlineByPageId($pageId, $mountPointParameter);
     }
 }

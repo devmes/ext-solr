@@ -16,7 +16,14 @@ if (!function_exists('strptime')) {
 // registering Index Queue page indexer helpers
 
 if (TYPO3_MODE == 'FE' && isset($_SERVER['HTTP_X_TX_SOLR_IQ'])) {
-    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/index_ts.php']['preprocessRequest']['ApacheSolrForTypo3\Solr\IndexQueue\PageIndexerRequestHandler'] = '&' . \ApacheSolrForTypo3\Solr\IndexQueue\PageIndexerRequestHandler::class . '->run';
+
+    // prevent indexing process from die() if page does not exist to be able to log errors properly.
+    $GLOBALS['TYPO3_CONF_VARS']['SYS']['Objects'][\TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::class] = array(
+        'className' => \ApacheSolrForTypo3\Solr\System\Mvc\Frontend\Controller\OverriddenTypoScriptFrontendController::class
+    );
+    define('EXT_SOLR_INDEXING_CONTEXT', true);
+
+    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/index_ts.php']['preprocessRequest']['ApacheSolrForTypo3\Solr\IndexQueue\PageIndexerRequestHandler'] = \ApacheSolrForTypo3\Solr\IndexQueue\PageIndexerRequestHandler::class . '->run';
     $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['Indexer']['indexPageSubstitutePageDocument']['ApacheSolrForTypo3\Solr\AdditionalFieldsIndexer'] = \ApacheSolrForTypo3\Solr\AdditionalFieldsIndexer::class;
 
     ApacheSolrForTypo3\Solr\IndexQueue\FrontendHelper\Manager::registerFrontendHelper(
@@ -97,110 +104,6 @@ ApacheSolrForTypo3\Solr\Search\SearchComponentManager::registerSearchComponent(
 
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
-// register plugin commands
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results, frequentsearches',
-    'frequentSearches',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\FrequentSearchesCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NONE
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'search, results',
-    'form',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\FormCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NONE
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'resultsPerPageSwitch',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\ResultsPerPageSwitchCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_SEARCHED
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_RESULTS
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'search, results',
-    'errors',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\ErrorsCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NONE
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'lastSearches',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\LastSearchesCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NONE
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'no_results',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\NoResultsCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_SEARCHED
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NO_RESULTS
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'faceting',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\FacetingCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_SEARCHED
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_RESULTS
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_NO_RESULTS
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'results',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\ResultsCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_SEARCHED
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_RESULTS
-);
-
-ApacheSolrForTypo3\Solr\CommandResolver::registerPluginCommand(
-    'results',
-    'sorting',
-    \ApacheSolrForTypo3\Solr\Plugin\Results\SortingCommand::class,
-    ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_SEARCHED
-    + ApacheSolrForTypo3\Solr\Plugin\PluginCommand::REQUIREMENT_HAS_RESULTS
-);
-
-# ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
-
-// registering facet types
-
-ApacheSolrForTypo3\Solr\Facet\FacetRendererFactory::registerFacetType(
-    'numericRange',
-    \ApacheSolrForTypo3\Solr\Facet\NumericRangeFacetRenderer::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\Range::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\Range::class
-);
-
-ApacheSolrForTypo3\Solr\Facet\FacetRendererFactory::registerFacetType(
-    'dateRange',
-    \ApacheSolrForTypo3\Solr\Facet\DateRangeFacetRenderer::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\DateRange::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\DateRange::class
-);
-
-ApacheSolrForTypo3\Solr\Facet\FacetRendererFactory::registerFacetType(
-    'hierarchy',
-    \ApacheSolrForTypo3\Solr\Facet\HierarchicalFacetRenderer::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\Hierarchy::class
-);
-
-ApacheSolrForTypo3\Solr\Facet\FacetRendererFactory::registerFacetType(
-    'queryGroup',
-    \ApacheSolrForTypo3\Solr\Facet\QueryGroupFacetRenderer::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\QueryGroup::class,
-    \ApacheSolrForTypo3\Solr\Query\FilterEncoder\QueryGroup::class
-);
-
-# ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
-
 // adding scheduler tasks
 
 $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks']['ApacheSolrForTypo3\Solr\Task\ReIndexTask'] = [
@@ -219,35 +122,9 @@ $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks']['ApacheSolrForTy
 
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
-// TODO move into pi_results, initializeSearch, add only when features are activated
-$TYPO3_CONF_VARS['EXTCONF']['solr']['modifySearchForm']['keepParameters'] = \ApacheSolrForTypo3\Solr\Plugin\Results\ParameterKeepingFormModifier::class;
-$TYPO3_CONF_VARS['EXTCONF']['solr']['modifySearchForm']['spellcheck'] = \ApacheSolrForTypo3\Solr\Plugin\Results\SpellCheckFormModifier::class;
-$TYPO3_CONF_VARS['EXTCONF']['solr']['modifySearchForm']['suggest'] = \ApacheSolrForTypo3\Solr\Plugin\Results\SuggestFormModifier::class;
-
-# ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
-
 // registering the eID scripts
 // TODO move to suggest form modifier
-$TYPO3_CONF_VARS['FE']['eID_include']['tx_solr_suggest'] = 'EXT:solr/Classes/Eid/Suggest.php';
 $TYPO3_CONF_VARS['FE']['eID_include']['tx_solr_api'] = 'EXT:solr/Classes/Eid/Api.php';
-
-# ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
-
-$hasCompatibilityLayer = \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::isLoaded('compatibility6');
-if ($hasCompatibilityLayer) {
-    \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addTypoScript(
-        'solr',
-        'setup',
-        'tt_content.search = COA
-         tt_content.search {
-           10 = < lib.stdheader
-           20 >
-           20 = < plugin.tx_solr_PiResults_Results
-           30 >
-        }',
-        'defaultContentRendering'
-    );
-}
 
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
@@ -267,6 +144,12 @@ $TYPO3_CONF_VARS['SC_OPTIONS']['tslib/class.tslib_content.php']['cObjTypeAndClas
     ApacheSolrForTypo3\Solr\ContentObject\Relation::CONTENT_OBJECT_NAME,
     \ApacheSolrForTypo3\Solr\ContentObject\Relation::class
 ];
+
+$TYPO3_CONF_VARS['SC_OPTIONS']['tslib/class.tslib_content.php']['cObjTypeAndClass'][ApacheSolrForTypo3\Solr\ContentObject\Classification::CONTENT_OBJECT_NAME] = [
+    ApacheSolrForTypo3\Solr\ContentObject\Classification::CONTENT_OBJECT_NAME,
+    \ApacheSolrForTypo3\Solr\ContentObject\Classification::class
+];
+
 
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
@@ -300,7 +183,7 @@ $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['extbase']['commandControllers'][] = \
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
 if (!isset($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName '])) {
-    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName '] = \ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\SearchResult::class;
+    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName '] = \ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\SearchResult::class;
 }
 
 if (!isset($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultSetClassName '])) {
@@ -323,4 +206,58 @@ if (!isset($GLOBALS['TYPO3_CONF_VARS']['LOG']['ApacheSolrForTypo3']['Solr']['wri
             ]
         ],
     ];
+}
+
+# ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
+
+\TYPO3\CMS\Extbase\Utility\ExtensionUtility::configurePlugin(
+    'ApacheSolrForTypo3.solr',
+    'pi_results',
+    [
+        'Search' => 'results,form,detail'
+    ],
+    [
+        'Search' => 'results'
+    ]
+);
+
+\TYPO3\CMS\Extbase\Utility\ExtensionUtility::configurePlugin(
+    'ApacheSolrForTypo3.solr',
+    'pi_search',
+    [
+        'Search' => 'form'
+    ]
+);
+
+\TYPO3\CMS\Extbase\Utility\ExtensionUtility::configurePlugin(
+    'ApacheSolrForTypo3.solr',
+    'pi_frequentlySearched',
+    [
+        'Search' => 'frequentlySearched'
+    ],
+    [
+        'Search' => 'frequentlySearched'
+    ]
+);
+
+\TYPO3\CMS\Extbase\Utility\ExtensionUtility::configurePlugin(
+    'ApacheSolrForTypo3.solr',
+    'pi_suggest',
+    [
+        'Suggest' => 'suggest'
+    ],
+    [
+        'Suggest' => 'suggest'
+    ]
+);
+
+// add tsconfig
+\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPageTSConfig('<INCLUDE_TYPOSCRIPT: source="FILE:EXT:solr/Configuration/TSconfig/ContentElementWizard.typoscript">');
+
+
+$isComposerMode = defined('TYPO3_COMPOSER_MODE') && TYPO3_COMPOSER_MODE;
+if(!$isComposerMode) {
+    // we load the autoloader for our libraries
+    $dir = \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extPath($_EXTKEY);
+    require $dir . '/Resources/Private/Php/ComposerLibraries/vendor/autoload.php';
 }

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,6 +24,9 @@ namespace ApacheSolrForTypo3\Solr\Report;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\System\Records\Pages\PagesRepository;
+use ApacheSolrForTypo3\Solr\System\Records\SystemDomain\SystemDomainRepository;
+use ApacheSolrForTypo3\Solr\System\Service\SiteService;
 use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\Error\Http\ServiceUnavailableException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -37,6 +40,19 @@ use TYPO3\CMS\Reports\Status;
  */
 class SolrConfigurationStatus extends AbstractSolrStatus
 {
+    /**
+     * @var SystemDomainRepository
+     */
+    protected $systemDomainRepository;
+
+    /**
+     * SolrConfigurationStatus constructor.
+     * @param SystemDomainRepository|null $systemDomainRepository
+     */
+    public function __construct(SystemDomainRepository $systemDomainRepository = null)
+    {
+        $this->systemDomainRepository = $systemDomainRepository ?? GeneralUtility::makeInstance(SystemDomainRepository::class);
+    }
 
     /**
      * Compiles a collection of configuration status checks.
@@ -82,7 +98,13 @@ class SolrConfigurationStatus extends AbstractSolrStatus
         }
 
         $report = $this->getRenderedReport('RootPageFlagStatus.html');
-        return GeneralUtility::makeInstance(Status::class, 'Sites', 'No sites found', $report, Status::ERROR);
+        return GeneralUtility::makeInstance(
+            Status::class,
+            /** @scrutinizer ignore-type */ 'Sites',
+            /** @scrutinizer ignore-type */ 'No sites found',
+            /** @scrutinizer ignore-type */ $report,
+            /** @scrutinizer ignore-type */ Status::ERROR
+        );
     }
 
     /**
@@ -98,7 +120,13 @@ class SolrConfigurationStatus extends AbstractSolrStatus
         }
 
         $report = $this->getRenderedReport('SolrConfigurationStatusDomainRecord.html', ['pages' => $rootPagesWithoutDomain]);
-        return GeneralUtility::makeInstance(Status::class, 'Domain Records', 'Domain records missing', $report, Status::ERROR);
+        return GeneralUtility::makeInstance(
+            Status::class,
+            /** @scrutinizer ignore-type */ 'Domain Records',
+            /** @scrutinizer ignore-type */ 'Domain records missing',
+            /** @scrutinizer ignore-type */ $report,
+            /** @scrutinizer ignore-type */ Status::ERROR
+        );
     }
 
     /**
@@ -115,7 +143,13 @@ class SolrConfigurationStatus extends AbstractSolrStatus
         }
 
         $report = $this->getRenderedReport('SolrConfigurationStatusIndexing.html', ['pages' => $rootPagesWithIndexingOff]);
-        return GeneralUtility::makeInstance(Status::class, 'Page Indexing', 'Indexing is disabled', $report, Status::WARNING);
+        return GeneralUtility::makeInstance(
+            Status::class,
+            /** @scrutinizer ignore-type */ 'Page Indexing',
+            /** @scrutinizer ignore-type */ 'Indexing is disabled',
+            /** @scrutinizer ignore-type */ $report,
+            /** @scrutinizer ignore-type */ Status::WARNING
+        );
     }
 
     /**
@@ -133,9 +167,23 @@ class SolrConfigurationStatus extends AbstractSolrStatus
             $rootPageIds[] = $rootPage['uid'];
         }
 
-        $domainRecords = $this->getDomainRecordsForRootPagesIds($rootPageIds);
+        $domainRecords = $this->systemDomainRepository->findDomainRecordsByRootPagesIds($rootPageIds);
         foreach ($rootPageIds as $rootPageId) {
+            $hasDomainRecord = true;
+            $hasDomainInTypoScript = true;
+
             if (!array_key_exists($rootPageId, $domainRecords)) {
+                $hasDomainRecord = false;
+            }
+
+            /** @var $siteService SiteService */
+            $siteService = GeneralUtility::makeInstance(SiteService::class);
+            $domain = $siteService->getFirstDomainForRootPage($rootPageId);
+            if ($domain === '') {
+                $hasDomainInTypoScript = false;
+            }
+
+            if (!$hasDomainRecord && !$hasDomainInTypoScript) {
                 $rootPagesWithoutDomain[$rootPageId] = $rootPages[$rootPageId];
             }
         }
@@ -174,25 +222,6 @@ class SolrConfigurationStatus extends AbstractSolrStatus
     }
 
     /**
-     * Retrieves sys_domain records for a set of root page ids.
-     *
-     * @param array $rootPageIds
-     * @return mixed
-     */
-    protected function getDomainRecordsForRootPagesIds($rootPageIds = [])
-    {
-        return $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            'uid, pid',
-            'sys_domain',
-            'pid IN(' . implode(',', $rootPageIds) . ') AND redirectTo=\'\' AND hidden=0',
-            'uid, pid, sorting',
-            'pid, sorting',
-            '',
-            'pid'
-        );
-    }
-
-    /**
      * Gets the site's root pages. The "Is root of website" flag must be set,
      * which usually is the case for pages with pid = 0.
      *
@@ -200,13 +229,9 @@ class SolrConfigurationStatus extends AbstractSolrStatus
      */
     protected function getRootPages()
     {
-        return $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            'uid, title',
-            'pages',
-            'is_siteroot = 1 AND deleted = 0 AND hidden = 0 AND pid != -1 AND doktype IN(1,4) ',
-            '', '', '',
-            'uid'
-        );
+        $pagesRepository = GeneralUtility::makeInstance(PagesRepository::class);
+
+        return $pagesRepository->findAllRootPages();
     }
 
     /**
@@ -219,7 +244,7 @@ class SolrConfigurationStatus extends AbstractSolrStatus
         if (empty($GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_solr.']['enabled'])) {
             return false;
         }
-        return (bool) $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_solr.']['enabled'];
+        return (bool)$GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_solr.']['enabled'];
     }
 
     /**

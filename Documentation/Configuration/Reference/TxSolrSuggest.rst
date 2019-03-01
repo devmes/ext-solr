@@ -68,3 +68,35 @@ Example - Here "Hello Solr" are the full keywords and the user started typing "W
 
 "Hello Solr Wo" -> q=Hello Solr, facet.prefix=Wo (default)
 "Hello Solr Wo" -> q=<empty>, facet.prefix=Hello Solr Wo (treatMultipleTermsAsSingleTerm)
+
+showTopResults
+--------------
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.suggest.showTopResults
+:Since: 8.0
+:Default: 1
+
+When this setting is enabled, the top results are shown in the suggest layer. The top results are build from the first search match,
+or when the first search delivers no hit, the results from the first suggestion are shown.
+
+numberOfTopResults
+------------------
+
+:Type: Integer
+:TS Path: plugin.tx_solr.suggest.numberOfTopResults
+:Since: 8.0
+:Default: 5
+
+Defines the number of top results that will be shown.
+
+additionalTopResultsFields
+--------------------------
+
+:Type: String
+:TS Path: plugin.tx_solr.suggest.additionalTopResultsFields
+:Since: 9.0
+
+Comma-separated list of fields that should be added to the top results response json.
+
+

@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\Score;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -62,9 +62,9 @@ class ScoreCalculationService
         foreach ($highScores as $highScore) {
             /** @var $highScore Score */
             $scores[] = '
-				<td>+ ' . $highScore->getScore() . '</td>
-				<td>' . $highScore->getFieldName() . '</td>
-				<td>' . $highScore->getBoost() . '</td>';
+				<td>+ ' . htmlspecialchars($highScore->getScore()) . '</td>
+				<td>' . htmlspecialchars($highScore->getFieldName()) . '</td>
+				<td>' . htmlspecialchars($highScore->getBoost()) . '</td>';
 
             $totalScore += $highScore->getScore();
         }
@@ -101,7 +101,7 @@ class ScoreCalculationService
          */
 
         // matches search term weights, ex: 0.42218783 = (MATCH) weight(content:iPod^40.0 in 43), product of:
-        $pattern = '/(.*) = \(MATCH\) weight\((.*)\^/';
+        $pattern = '/(.*) = weight\(([^ \)]*)/';
         $scoreMatches = [];
         preg_match_all($pattern, $debugData, $scoreMatches);
 

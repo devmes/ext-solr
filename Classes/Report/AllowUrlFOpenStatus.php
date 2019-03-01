@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -56,7 +56,13 @@ class AllowUrlFOpenStatus extends AbstractSolrStatus
 				this setting disabled.';
         }
 
-        $reports[] = GeneralUtility::makeInstance(Status::class, 'allow_url_fopen', $value, $message, $severity);
+        $reports[] = GeneralUtility::makeInstance(
+            Status::class,
+            /** @scrutinizer ignore-type */ 'allow_url_fopen',
+            /** @scrutinizer ignore-type */ $value,
+            /** @scrutinizer ignore-type */ $message,
+            /** @scrutinizer ignore-type */ $severity
+        );
 
         return $reports;
     }

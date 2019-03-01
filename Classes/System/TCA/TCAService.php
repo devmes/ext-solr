@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\System\TCA;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -44,11 +44,11 @@ class TCAService
 
     /**
      * TCAService constructor.
-     * @param null $TCA
+     * @param array|null $TCA
      */
     public function __construct($TCA = null)
     {
-        $this->tca = (array)(is_null($TCA) ? $GLOBALS['TCA'] : $TCA);
+        $this->tca = (array)($TCA ?? $GLOBALS['TCA']);
     }
 
     /**
@@ -80,7 +80,7 @@ class TCAService
             ||
             (isset($this->tca[$table]['ctrl']['delete']) && !empty($record[$this->tca[$table]['ctrl']['delete']]))
             ||
-            ($table == 'pages' && !empty($record['no_search']))
+            ($table === 'pages' && !empty($record['no_search']))
         ) {
             return false;
         }
@@ -198,6 +198,56 @@ class TCAService
     }
 
     /**
+     * @param string $table
+     * @param array $record
+     * @return mixed
+     */
+    public function getTranslationOriginalUid($table, array $record)
+    {
+        return $record[$this->tca[$table]['ctrl']['transOrigPointerField']];
+    }
+
+    /**
+     * Retrieves the uid that as marked as original if the record is a translation if not it returns the
+     * originalUid.
+     *
+     * @param $table
+     * @param array $record
+     * @param $originalUid
+     * @return integer
+     */
+    public function getTranslationOriginalUidIfTranslated($table, array $record, $originalUid)
+    {
+        if (!$this->isLocalizedRecord($table, $record)) {
+            return $originalUid;
+        }
+
+        return $this->getTranslationOriginalUid($table, $record);
+    }
+
+    /**
+     * Checks whether a record is a localization overlay.
+     *
+     * @param string $tableName The record's table name
+     * @param array $record The record to check
+     * @return bool TRUE if the record is a language overlay, FALSE otherwise
+     */
+    public function isLocalizedRecord($tableName, array $record)
+    {
+        $translationUid = $this->getTranslationOriginalUid($tableName, $record);
+        if (is_null($translationUid)) {
+            return false;
+        }
+
+        $hasTranslationReference = $translationUid > 0;
+        if (!$hasTranslationReference) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Compiles a list of visibility affecting fields of a table so that it can
      * be used in SQL queries.
      *
@@ -220,7 +270,7 @@ class TCAService
             $fields[] = $this->tca[$table]['ctrl']['delete'];
         }
 
-        if ($table == 'pages') {
+        if ($table === 'pages') {
             $fields[] = 'no_search';
             $fields[] = 'doktype';
         }
@@ -228,5 +278,38 @@ class TCAService
         $this->visibilityAffectingFields[$table] = implode(', ', $fields);
 
         return $this->visibilityAffectingFields[$table];
+    }
+
+    /**
+     * Checks if TCA is available for column by table
+     *
+     * @param string $tableName
+     * @param string $fieldName
+     * @return bool
+     */
+    public function getHasConfigurationForField(string $tableName, string $fieldName) : bool
+    {
+        return isset($this->tca[$tableName]['columns'][$fieldName]);
+    }
+
+    /**
+     * Returns the tca configuration for a certains field
+     *
+     * @param string $tableName
+     * @param string $fieldName
+     * @return array
+     */
+    public function getConfigurationForField(string $tableName, string $fieldName) : array
+    {
+        return $this->tca[$tableName]['columns'][$fieldName] ?? [];
+    }
+
+    /**
+     * @param string $tableName
+     * @return array
+     */
+    public function getTableConfiguration(string $tableName) : array
+    {
+        return $this->tca[$tableName] ?? [];
     }
 }

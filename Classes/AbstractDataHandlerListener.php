@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -47,9 +47,13 @@ abstract class AbstractDataHandlerListener
      */
     protected $configurationAwareRecordService;
 
-    public function __construct()
+    /**
+     * AbstractDataHandlerListener constructor.
+     * @param ConfigurationAwareRecordService|null $recordService
+     */
+    public function __construct(ConfigurationAwareRecordService $recordService = null)
     {
-        $this->configurationAwareRecordService = GeneralUtility::makeInstance(ConfigurationAwareRecordService::class);
+        $this->configurationAwareRecordService = $recordService ?? GeneralUtility::makeInstance(ConfigurationAwareRecordService::class);
     }
 
     /**
@@ -138,7 +142,7 @@ abstract class AbstractDataHandlerListener
         $fieldsForCurrentState = $this->getAllRelevantFieldsForCurrentState();
         $fieldListToRetrieve = implode(',', $fieldsForCurrentState);
         $page = BackendUtility::getRecord('pages', $pageId, $fieldListToRetrieve, '', false);
-        foreach ($this->getUpdateSubPagesRecursiveTriggerConfiguration() as $configurationName => $triggerConfiguration) {
+        foreach ($this->getUpdateSubPagesRecursiveTriggerConfiguration() as $triggerConfiguration) {
             $allCurrentStateFieldsMatch = $this->getAllCurrentStateFieldsMatch($triggerConfiguration, $page);
             $allChangeSetValuesMatch = $this->getAllChangeSetValuesMatch($triggerConfiguration, $changedFields);
 

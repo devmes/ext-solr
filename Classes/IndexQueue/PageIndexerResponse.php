@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -110,10 +110,8 @@ class PageIndexerResponse
      */
     public function sendHeaders()
     {
-        // This overwrites the "Content-Encoding: gzip" header that is usually sent by TYPO3 by default. This header
-        // would require that the content really is gzip-ed (which it is not). This lets e.g. Varnish 3.0
-        // fail when trying to decode the response.
-        header('Content-Encoding: none');
+        // set content type header to prevent problems with Content-Encoding
+        header('Content-Type: application/json');
 
         header('Content-Length: ' . strlen($this->getContent()));
     }

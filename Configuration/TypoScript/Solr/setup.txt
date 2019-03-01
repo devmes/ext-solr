@@ -1,19 +1,6 @@
-plugin.tx_solr_PiResults_Results = USER_INT
-plugin.tx_solr_PiResults_Results.userFunc = ApacheSolrForTypo3\Solr\Plugin\Results\Results->main
-tt_content.list.20.solr_pi_results =< plugin.tx_solr_PiResults_Results
-
-plugin.tx_solr_PiSearch_Search = USER
-plugin.tx_solr_PiSearch_Search.userFunc = ApacheSolrForTypo3\Solr\Plugin\Search\Search->main
-tt_content.list.20.solr_pi_search =< plugin.tx_solr_PiSearch_Search
-
-plugin.tx_solr_PiFrequentSearches_FrequentSearches = USER
-plugin.tx_solr_PiFrequentSearches_FrequentSearches.userFunc = ApacheSolrForTypo3\Solr\Plugin\FrequentSearches\FrequentSearches->main
-tt_content.list.20.solr_pi_frequentsearches =< plugin.tx_solr_PiFrequentSearches_FrequentSearches
-
-
 plugin.tx_solr {
 
-	enabled = 1
+	enabled = {$plugin.tx_solr.enabled}
 
 	enableDebugMode = 0
 
@@ -22,42 +9,22 @@ plugin.tx_solr {
 	}
 
 	solr {
-		scheme = {$plugin.tx_solr.solr.scheme}
-		host   = {$plugin.tx_solr.solr.host}
-		port   = {$plugin.tx_solr.solr.port}
-		path   = {$plugin.tx_solr.solr.path}
-		username = {$plugin.tx_solr.solr.username}
-		password = {$plugin.tx_solr.solr.password}
-	}
-
-	templateFiles {
-		frequentSearches = EXT:solr/Resources/Templates/PiFrequentSearches/frequentsearches.htm
-		pagebrowser      = EXT:solr/Resources/Templates/PiResults/pagebrowser.htm
-		results          = EXT:solr/Resources/Templates/PiResults/results.htm
-		search           = EXT:solr/Resources/Templates/PiSearch/search.htm
-	}
-
-	cssFiles {
-		results = EXT:solr/Resources/Css/PiResults/results.css
-		ui      = EXT:solr/Resources/Css/JQueryUi/jquery-ui.custom.css
-	}
-
-	javascriptFiles {
-		loadIn = footer
-
-		library = EXT:solr/Resources/JavaScript/JQuery/jquery.min.js
-
-		ui = EXT:solr/Resources/JavaScript/JQuery/jquery-ui.min.js
-
-		ui.datepicker.de = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-de.js
-		ui.datepicker.fr = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-fr.js
-		ui.datepicker.nl = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-nl.js
-
-		suggest = EXT:solr/Resources/JavaScript/EidSuggest/suggest.js
-
-		faceting.limitExpansion     = EXT:solr/Resources/JavaScript/PiResults/results.js
-		faceting.dateRangeHelper    = EXT:solr/Resources/JavaScript/PiResults/date_range_facet.js
-		faceting.numericRangeHelper = EXT:solr/Resources/JavaScript/PiResults/numeric_range_facet.js
+        read {
+            scheme = {$plugin.tx_solr.solr.scheme}
+            host   = {$plugin.tx_solr.solr.host}
+            port   = {$plugin.tx_solr.solr.port}
+            path   = {$plugin.tx_solr.solr.path}
+            username = {$plugin.tx_solr.solr.username}
+            password = {$plugin.tx_solr.solr.password}
+        }
+        write {
+            scheme = {$plugin.tx_solr.solr.scheme}
+            host   = {$plugin.tx_solr.solr.host}
+            port   = {$plugin.tx_solr.solr.port}
+            path   = {$plugin.tx_solr.solr.path}
+            username = {$plugin.tx_solr.solr.username}
+            password = {$plugin.tx_solr.solr.password}
+        }
 	}
 
 	index {
@@ -121,13 +88,15 @@ plugin.tx_solr {
 
 		keepExistingParametersForNewSearches = 0
 
+		ignoreGlobalQParameter = 0
+
 		query {
 			allowEmptyQuery = 0
 
 			allowedSites = __solr_current_site
 
 			// qf parameter http://wiki.apache.org/solr/DisMaxQParserPlugin#qf_.28Query_Fields.29
-			queryFields = content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0
+			queryFields = content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0, description^4.0, abstract^1.0, subtitle^1.0, navtitle^1.0, author^1.0
 
 			// fl parameter http://wiki.apache.org/solr/CommonQueryParameters#fl
 			returnFields = *, score
@@ -141,11 +110,75 @@ plugin.tx_solr {
 			// see http://wiki.apache.org/solr/DisMaxQParserPlugin#bq_.28Boost_Query.29
 			boostQuery =
 
+			// see http://lucene.apache.org/solr/guide/7_0/the-dismax-query-parser.html#the-tie-tie-breaker-parameter
+			tieParameter =
+
 			filter {
 
 			}
 
 			sortBy =
+
+			// https://www.hathitrust.org/blogs/large-scale-search/slow-queries-and-common-words-part-2
+			// http://blog.thedigitalgroup.com/vijaym/understanding-phrasequery-and-slop-in-solr/
+			// https://solr.pl/en/2010/07/14/solr-and-phrasequery-phrase-bonus-in-query-stage/
+
+			// see https://lucene.apache.org/solr/guide/7_0/the-dismax-query-parser.html#TheDisMaxQueryParser-Thepf_PhraseFields_Parameter
+			// EXT:Solr configures Schemas from Apache Solr to use content field with boost of 2.0 per default.
+			// By enabling of phrase search, Apache Solr will build a phrase queries for a list of defined fields(phrase.fields) and boost the documents containing the terms in defined proximity(phrase.slop).
+			// phrase.querySlop
+			phrase = 0
+			phrase {
+				// Note: Those are field for implicit phrase searching. On explicit "phrase searching" Apache Solr uses queryFields("qf" parameter)
+				fields = content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+				// The number of words between words in query phrase is the slop-value.
+				// e.g. on query phrase "Hello World"
+				// @ slop = 0 will math "Hello World" but not "Hello wonderful World"
+				// @ slop = 1 will math "Hello World" and/or "Hello wonderful World"
+				// Note: this value is for implicit phrase searching(without double quotes)
+				slop = 0
+				
+				// The concept of query slop is similar to phrase.slop but it applies to the explicit phrase queries from the user and to match documents instead of boosting.
+				// Also if the user uses double quotes in the search term, then
+				// the query slop value is used and
+				// the result contains only the documents with those phrase.
+				// see https://lucene.apache.org/solr/guide/7_0/the-extended-dismax-query-parser.html http://lucene.472066.n3.nabble.com/Query-slop-vs-phrase-slop-td1637041.html
+				// Note: this value is for explicit "phrase searching"(with double quotes)
+				querySlop = 0
+			}
+
+			// bigram phrase functionality is similar to the Ngram filters, difference is that
+			//     filters strip down the words to chars(char combinations)
+			//     bigraming phrases strip down the sentence to the two-word combinations(phrases)
+			// e.g. "bigraming phrases strip down the sentence to phrases" generates following
+			// "bigraming phrases"
+			//           "phrases strip"
+			//                   "strip down"
+			//                         "down the"
+			//                              "the sentence"
+			//                                   "sentence to"
+			//                                            "to phrases"
+			// Note: The triplets phrases will be stripped down to two two-word phrases
+			bigramPhrase = 0
+			bigramPhrase {
+				fields = content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+				slop = 0
+			}
+
+			// Please see bigram phrases. Difference to bi is tri, which means building of triplets phrases.
+			// e.g. "trigraming phrases strip down the sentence to triplets phrases" generates following triplets
+			// "trigraming phrases strip"
+			//            "phrases strip down"
+			//                    "strip down the"
+			//                          "down the sentence"
+			//                               "the sentence to"
+			//                                   "sentence to triplets"
+			//                                            "to triplets phrases"
+			trigramPhrase = 0
+			trigramPhrase {
+				fields = content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+				slop = 0
+			}
 		}
 
 		results {
@@ -162,64 +195,6 @@ plugin.tx_solr {
 			resultsPerPage = {$plugin.tx_solr.search.results.resultsPerPage}
 			resultsPerPageSwitchOptions = 10, 25, 50
 
-			pagebrowser {
-				enabled = 1
-
-				pagesBefore = 3
-				pagesAfter = 3
-
-				enableMorePages = 1
-				enableLessPages = 1
-			}
-
-			// fieldname => processing instruction, available instructions: timestamp, skip (removes the field from the result)
-			fieldProcessingInstructions {
-				changed = timestamp
-				created = timestamp
-				indexed = timestamp
-				# TODO rename the skip instruction to remove?!
-				spell = skip
-			}
-
-			fieldRenderingInstructions {
-
-				url = CASE
-				url {
-					key.field = type
-
-					default = TEXT
-					default {
-						field = url
-						htmlSpecialChars = 1
-						htmlSpecialChars.preserveEntities = 1
-					}
-				}
-
-				link = CASE
-				link {
-					key.field = type
-
-					pages  = TEXT
-					pages {
-						field = title
-
-						typolink {
-							parameter.field = uid
-						}
-					}
-
-					default  = TEXT
-					default {
-						field = title
-
-						typolink {
-							parameter.field = url
-							extTarget =
-						}
-					}
-				}
-			}
-
 			showDocumentScoreAnalysis = 0
 		}
 
@@ -227,7 +202,7 @@ plugin.tx_solr {
 		spellchecking {
 			wrap = |<div class="spelling-suggestions">###LLL:didYouMean### |</div>|
 			searchUsingSpellCheckerSuggestion = 0
-			numberOfSuggestionsToTry = 0
+			numberOfSuggestionsToTry = 1
 		}
 
 		lastSearches = 0
@@ -296,11 +271,8 @@ plugin.tx_solr {
 			minimumCount = 1
 			sortBy = count
 			limit = 10
-			singleFacetMode = 0
 			showEmptyFacets = 0
 			keepAllFacetsOnSelection = 0
-
-			facetLinkATagParams = rel="nofollow"
 
 			facetLinkUrlParameters =
 
@@ -310,9 +282,6 @@ plugin.tx_solr {
 					field = type
 				}
 			}
-
-			// available place holders: @facetValue, @facetName, @facetLabel, @facetText
-			removeFacetLinkText = @facetLabel: @facetText
 
 			showAllLink.wrap = <li>|</li>
 		}
@@ -337,29 +306,52 @@ plugin.tx_solr {
 		numberOfSuggestions = 10
 		suggestField = spell
 		forceHttps = 0
+		showTopResults = 1
+		numberOfTopResults = 5
 	}
 
 	statistics = 0
 	statistics {
-		anonymizeIP = 0
+		anonymizeIP = 1
 	}
 
-	viewHelpers {
-		crop {
-			maxLength = 300
-			cropIndicator = ...
+	view {
+		pluginNamespace = tx_solr
+
+		templateRootPaths {
+			0 = EXT:solr/Resources/Private/Templates/
+			10 = {$plugin.tx_solr.view.templateRootPath}
+		}
+		partialRootPaths {
+			0 = EXT:solr/Resources/Private/Partials/
+			10 = {$plugin.tx_solr.view.partialRootPath}
+		}
+		layoutRootPaths {
+			0 = EXT:solr/Resources/Private/Layouts/
+			10 = {$plugin.tx_solr.view.layoutRootPath}
 		}
 
-		sortIndicator {
-			up {
-				altText = sort ascending
-				file = EXT:solr/Resources/Public/Images/IndicatorUp.png
-			}
-			down {
-				altText = sort descending
-				file = EXT:solr/Resources/Public/Images/IndicatorDown.png
-			}
-		}
+        // By convention the templates is loaded from EXT:solr/Resources/Private/Templates/Frontend/Search/(ActionName).html
+        // If you want to define a different entry template, you can do this here to overwrite the conventional default template
+        // if you want to use FLUID fallbacks you can just configure the template name, otherwise you could also use a full reference EXT:/.../
+        // The templates that you configure in availableTemplate can be used in the flexform by the editor to select a template for the concrete plugin instance.
+        templateFiles {
+            //	results = Results
+            //	results.availableTemplates {
+            // 		default {
+            // 			label = Default Searchresults Template
+            // 			file = Results
+            // 		}
+            //	}
+            //	form = Form
+            //	form.availableTemplates {
+            //	 	default {
+            //			label = Default Searchform Template
+            //			file = Form
+            // 		}
+            // }
+            //	frequentSearched = FrequentlySearched
+        }
 	}
 
 	logging {
@@ -385,4 +377,53 @@ plugin.tx_solr {
 			rawDelete = 0
 		}
 	}
+
+	features {
+		requireCHashArgumentForActionArguments = 0
+		useRawDocuments = 1
+	}
 }
+
+# Provide typoscript libraries
+lib.solr_extbase_bootstrap = USER
+lib.solr_extbase_bootstrap {
+	userFunc = TYPO3\CMS\Extbase\Core\Bootstrap->run
+	vendorName = ApacheSolrForTypo3
+	extensionName = Solr
+	settings < plugin.tx_solr.settings
+	persistence < plugin.tx_solr.persistence
+	view < plugin.tx_solr.view
+}
+
+plugin.tx_solr_PiResults_Results < lib.solr_extbase_bootstrap
+plugin.tx_solr_PiResults_Results = USER_INT
+plugin.tx_solr_PiResults_Results {
+	pluginName = pi_results
+	switchableControllerActions {
+		Search {
+			1 = results
+			2 = form
+		}
+	}
+}
+
+plugin.tx_solr_PiSearch_Search < lib.solr_extbase_bootstrap
+plugin.tx_solr_PiSearch_Search {
+	pluginName = pi_search
+	switchableControllerActions {
+		Search {
+			1 = form
+		}
+	}
+}
+
+plugin.tx_solr_PiFrequentSearches_FrequentSearches < lib.solr_extbase_bootstrap
+plugin.tx_solr_PiFrequentSearches_FrequentSearches {
+	pluginName = pi_frequentlySearched
+	switchableControllerActions {
+		Search {
+			1 = frequentlySearched
+		}
+	}
+}
+

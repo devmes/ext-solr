@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,15 +24,15 @@ namespace ApacheSolrForTypo3\Solr;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use Apache_Solr_Document;
 use ApacheSolrForTypo3\Solr\Access\Rootline;
 use ApacheSolrForTypo3\Solr\Domain\Search\ApacheSolrDocument\Builder;
-use ApacheSolrForTypo3\Solr\Domain\Variants\IdBuilder;
 use ApacheSolrForTypo3\Solr\FieldProcessor\Service;
 use ApacheSolrForTypo3\Solr\IndexQueue\FrontendHelper\PageFieldMappingIndexer;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrConnection;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
@@ -55,7 +55,7 @@ class Typo3PageIndexer
     /**
      * The Solr document generated for the current page.
      *
-     * @var \Apache_Solr_Document
+     * @var Document
      */
     protected static $pageSolrDocument = null;
     /**
@@ -67,7 +67,7 @@ class Typo3PageIndexer
     /**
      * Solr server connection.
      *
-     * @var SolrService
+     * @var SolrConnection
      */
     protected $solrConnection = null;
     /**
@@ -123,7 +123,7 @@ class Typo3PageIndexer
      */
     public function __construct(TypoScriptFrontendController $page)
     {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
 
         $this->page = $page;
         $this->pageUrl = GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL');
@@ -149,7 +149,7 @@ class Typo3PageIndexer
             }
         }
 
-        $this->pageAccessRootline = GeneralUtility::makeInstance(Rootline::class, '');
+        $this->pageAccessRootline = GeneralUtility::makeInstance(Rootline::class, /** @scrutinizer ignore-type */ '');
     }
 
     /**
@@ -170,7 +170,7 @@ class Typo3PageIndexer
         $solr = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId($this->page->id, $this->page->sys_language_uid);
 
         // do not continue if no server is available
-        if (!$solr->ping()) {
+        if (!$solr->getWriteService()->ping()) {
             throw new \Exception(
                 'No Solr instance available while trying to index a page.',
                 1234790825
@@ -193,7 +193,7 @@ class Typo3PageIndexer
     /**
      * Gets the Solr document generated for the current page.
      *
-     * @return \Apache_Solr_Document|NULL The page's Solr document or NULL if it has not been generated yet.
+     * @return Document|NULL The page's Solr document or NULL if it has not been generated yet.
      */
     public static function getPageSolrDocument()
     {
@@ -204,12 +204,12 @@ class Typo3PageIndexer
      * Allows to provide a Solr server connection other than the one
      * initialized by the constructor.
      *
-     * @param SolrService $solrConnection Solr connection
+     * @param SolrConnection $solrConnection Solr connection
      * @throws \Exception if the Solr server cannot be reached
      */
-    public function setSolrConnection(SolrService $solrConnection)
+    public function setSolrConnection(SolrConnection $solrConnection)
     {
-        if (!$solrConnection->ping()) {
+        if (!$solrConnection->getWriteService()->ping()) {
             throw new \Exception(
                 'Could not connect to Solr server.',
                 1323946472
@@ -257,7 +257,7 @@ class Typo3PageIndexer
     /**
      * Applies the configured post processors (indexPagePostProcessPageDocument)
      *
-     * @param \Apache_Solr_Document $pageDocument
+     * @param Document $pageDocument
      */
     protected function applyIndexPagePostProcessors($pageDocument)
     {
@@ -266,7 +266,7 @@ class Typo3PageIndexer
         }
 
         foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['Indexer']['indexPagePostProcessPageDocument'] as $classReference) {
-            $postProcessor = GeneralUtility::getUserObj($classReference);
+            $postProcessor = GeneralUtility::makeInstance($classReference);
             if (!$postProcessor instanceof PageDocumentPostProcessor) {
                 throw new \UnexpectedValueException(get_class($pageDocument) . ' must implement interface ' . PageDocumentPostProcessor::class, 1397739154);
             }
@@ -278,15 +278,14 @@ class Typo3PageIndexer
     /**
      * Builds the Solr document for the current page.
      *
-     * @return \Apache_Solr_Document A document representing the page
+     * @return Document A document representing the page
      */
     protected function getPageDocument()
     {
         $documentBuilder = GeneralUtility::makeInstance(Builder::class);
-        $document = $documentBuilder->fromPage($this->page, $this->pageUrl, $this->pageAccessRootline, $this->mountPointParameter);
-        $idField = $document->getField('id');
+        $document = $documentBuilder->fromPage($this->page, $this->pageUrl, $this->pageAccessRootline, (string)$this->mountPointParameter);
 
-        self::$pageSolrDocumentId = $idField['value'];
+        self::$pageSolrDocumentId = $document['id'];
 
         return $document;
     }
@@ -321,10 +320,10 @@ class Typo3PageIndexer
      * Allows third party extensions to replace or modify the page document
      * created by this indexer.
      *
-     * @param \Apache_Solr_Document $pageDocument The page document created by this indexer.
-     * @return \Apache_Solr_Document An Apache Solr document representing the currently indexed page
+     * @param Document $pageDocument The page document created by this indexer.
+     * @return Document An Apache Solr document representing the currently indexed page
      */
-    protected function substitutePageDocument(\Apache_Solr_Document $pageDocument)
+    protected function substitutePageDocument(Document $pageDocument)
     {
         if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['Indexer']['indexPageSubstitutePageDocument'])) {
             return $pageDocument;
@@ -332,7 +331,7 @@ class Typo3PageIndexer
 
         $indexConfigurationName = $this->getIndexConfigurationNameForCurrentPage();
         foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['Indexer']['indexPageSubstitutePageDocument'] as $classReference) {
-            $substituteIndexer = GeneralUtility::getUserObj($classReference);
+            $substituteIndexer = GeneralUtility::makeInstance($classReference);
 
             if (!$substituteIndexer instanceof SubstitutePageIndexer) {
                 $message = get_class($substituteIndexer) . ' must implement interface ' . SubstitutePageIndexer::class;
@@ -344,8 +343,8 @@ class Typo3PageIndexer
             }
 
             $substituteDocument = $substituteIndexer->getPageDocument($pageDocument);
-            if (!$substituteDocument instanceof Apache_Solr_Document) {
-                $message = 'The document returned by ' . get_class($substituteIndexer) . ' is not a valid Apache_Solr_Document document.';
+            if (!$substituteDocument instanceof Document) {
+                $message = 'The document returned by ' . get_class($substituteIndexer) . ' is not a valid Document object.';
                 throw new \UnexpectedValueException($message, 1310490952);
             }
             $pageDocument = $substituteDocument;
@@ -368,11 +367,11 @@ class Typo3PageIndexer
      * Allows third party extensions to provide additional documents which
      * should be indexed for the current page.
      *
-     * @param \Apache_Solr_Document $pageDocument The main document representing this page.
-     * @param \Apache_Solr_Document[] $existingDocuments An array of documents already created for this page.
-     * @return array An array of additional \Apache_Solr_Document objects to index
+     * @param Document $pageDocument The main document representing this page.
+     * @param Document[] $existingDocuments An array of documents already created for this page.
+     * @return array An array of additional Document objects to index
      */
-    protected function getAdditionalDocuments(\Apache_Solr_Document $pageDocument, array $existingDocuments)
+    protected function getAdditionalDocuments(Document $pageDocument, array $existingDocuments)
     {
         $documents = $existingDocuments;
 
@@ -381,7 +380,7 @@ class Typo3PageIndexer
         }
 
         foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['Indexer']['indexPageAddDocuments'] as $classReference) {
-            $additionalIndexer = GeneralUtility::getUserObj($classReference);
+            $additionalIndexer = GeneralUtility::makeInstance($classReference);
 
             if (!$additionalIndexer instanceof AdditionalPageIndexer) {
                 $message = get_class($additionalIndexer) . ' must implement interface ' . AdditionalPageIndexer::class;
@@ -415,7 +414,7 @@ class Typo3PageIndexer
     /**
      * Adds the collected documents to the Solr index.
      *
-     * @param array $documents An array of \Apache_Solr_Document objects.
+     * @param array $documents An array of Document objects.
      * @return bool TRUE if documents were added successfully, FALSE otherwise
      */
     protected function addDocumentsToSolrIndex(array $documents)
@@ -427,38 +426,23 @@ class Typo3PageIndexer
         }
 
         try {
-            $this->logger->log(
-                SolrLogManager::INFO,
-                'Adding ' . count($documents) . ' documents.',
-                $documents
-            );
+            $this->logger->log(SolrLogManager::INFO, 'Adding ' . count($documents) . ' documents.', $documents);
 
             // chunk adds by 20
             $documentChunks = array_chunk($documents, 20);
             foreach ($documentChunks as $documentChunk) {
-                $response = $this->solrConnection->addDocuments($documentChunk);
-
+                $response = $this->solrConnection->getWriteService()->addDocuments($documentChunk);
                 if ($response->getHttpStatus() != 200) {
-                    $transportException = new \Apache_Solr_HttpTransportException($response);
-                    throw new \RuntimeException('Solr Request failed.', 1331834983, $transportException);
+                    throw new \RuntimeException('Solr Request failed.', 1331834983);
                 }
             }
 
             $documentsAdded = true;
         } catch (\Exception $e) {
-            $this->logger->log(
-                SolrLogManager::ERROR,
-                $e->getMessage() . ' Error code: ' . $e->getCode()
-            );
+            $this->logger->log(SolrLogManager::ERROR, $e->getMessage() . ' Error code: ' . $e->getCode());
 
             if ($this->configuration->getLoggingExceptions()) {
-                $this->logger->log(
-                    SolrLogManager::ERROR,
-                    'Exception while adding documents',
-                    [
-                        $e->__toString()
-                    ]
-                );
+                $this->logger->log(SolrLogManager::ERROR, 'Exception while adding documents', [$e->__toString()]);
             }
         }
 
@@ -508,7 +492,7 @@ class Typo3PageIndexer
     /**
      * Gets the documents that have been sent to Solr
      *
-     * @return array An array of \Apache_Solr_Document objects
+     * @return array An array of Document objects
      */
     public function getDocumentsSentToSolr()
     {

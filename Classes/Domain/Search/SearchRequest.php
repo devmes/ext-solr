@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,6 +24,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search;
  *
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
+
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\Util\ArrayAccessor;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
@@ -42,6 +43,8 @@ class SearchRequest
     protected $id;
 
     /**
+     * Default namespace overwritten with the configured plugin namespace.
+     *
      * @var string
      */
     protected $argumentNameSpace = 'tx_solr';
@@ -49,9 +52,11 @@ class SearchRequest
     /**
      * Arguments that should be kept for sub requests.
      *
+     * Default values, overwritten in the constructor with the namespaced arguments
+     *
      * @var array
      */
-    protected $persistentArgumentsPaths = ['q', 'tx_solr:filter', 'tx_solr:sort'];
+    protected $persistentArgumentsPaths = ['tx_solr:q', 'tx_solr:filter', 'tx_solr:sort'];
 
     /**
      * @var bool
@@ -106,6 +111,22 @@ class SearchRequest
         $this->contextSystemLanguageUid = $sysLanguageUid;
         $this->contextTypoScriptConfiguration = $typoScriptConfiguration;
         $this->id = spl_object_hash($this);
+
+        // overwrite the plugin namespace and the persistentArgumentsPaths
+        if (!is_null($typoScriptConfiguration)) {
+            $this->argumentNameSpace = $typoScriptConfiguration->getSearchPluginNamespace();
+        }
+
+        $this->persistentArgumentsPaths = [$this->argumentNameSpace . ':q', $this->argumentNameSpace . ':filter', $this->argumentNameSpace . ':sort', $this->argumentNameSpace . ':groupPage'];
+
+        if (!is_null($typoScriptConfiguration)) {
+            $additionalPersistentArgumentsNames = $typoScriptConfiguration->getSearchAdditionalPersistentArgumentNames();
+            foreach ($additionalPersistentArgumentsNames ?? [] as $additionalPersistentArgumentsName) {
+                $this->persistentArgumentsPaths[] = $this->argumentNameSpace . ':' . $additionalPersistentArgumentsName;
+            }
+            $this->persistentArgumentsPaths = array_unique($this->persistentArgumentsPaths);
+        }
+
         $this->reset();
     }
 
@@ -154,7 +175,7 @@ class SearchRequest
         $activeFacets = $this->getActiveFacets();
         $facetNames = [];
 
-        array_map(function ($activeFacet) use (&$facetNames) {
+        array_map(function($activeFacet) use (&$facetNames) {
             $facetNames[] = substr($activeFacet, 0, strpos($activeFacet, ':'));
         }, $activeFacets);
 
@@ -171,7 +192,7 @@ class SearchRequest
         $values = [];
         $activeFacets = $this->getActiveFacets();
 
-        array_map(function ($activeFacet) use (&$values, $facetName) {
+        array_map(function($activeFacet) use (&$values, $facetName) {
             $parts = explode(':', $activeFacet, 2);
             if ($parts[0] === $facetName) {
                 $values[] = $parts[1];
@@ -184,7 +205,7 @@ class SearchRequest
     /**
      * @return array
      */
-    protected function getActiveFacets()
+    public function getActiveFacets()
     {
         $path = $this->prefixWithNamespace('filter');
         $pathValue = $this->argumentsAccessor->get($path, []);
@@ -273,7 +294,7 @@ class SearchRequest
     public function removeAllFacetValuesByName($facetName)
     {
         $facetValues = $this->getActiveFacets();
-        $facetValues = array_filter($facetValues, function ($facetValue) use ($facetName) {
+        $facetValues = array_filter($facetValues, function($facetValue) use ($facetName) {
             $parts = explode(':', $facetValue, 2);
             return $parts[0] !== $facetName;
         });
@@ -321,10 +342,10 @@ class SearchRequest
      *
      * @return string
      */
-    protected function getSorting()
+    public function getSorting()
     {
         $path = $this->prefixWithNamespace('sort');
-        return $this->argumentsAccessor->get($path);
+        return $this->argumentsAccessor->get($path, '');
     }
 
     /**
@@ -336,7 +357,7 @@ class SearchRequest
     protected function getSortingPart($index)
     {
         $sorting = $this->getSorting();
-        if ($sorting === null) {
+        if ($sorting === '') {
             return null;
         }
 
@@ -361,7 +382,7 @@ class SearchRequest
      */
     public function getSortingDirection()
     {
-        return strtolower($this->getSortingPart(1));
+        return mb_strtolower($this->getSortingPart(1));
     }
 
     /**
@@ -416,6 +437,83 @@ class SearchRequest
     }
 
     /**
+     * Can be used to reset all groupPages.
+     *
+     * @return SearchRequest
+     */
+    public function removeAllGroupItemPages(): SearchRequest
+    {
+        $path = $this->prefixWithNamespace('groupPage');
+        $this->argumentsAccessor->reset($path);
+
+        return $this;
+    }
+
+    /**
+     * Can be used to paginate within a groupItem.
+     *
+     * @param string $groupName e.g. type
+     * @param string $groupItemValue e.g. pages
+     * @param int $page
+     * @return SearchRequest
+     */
+    public function setGroupItemPage(string $groupName, string $groupItemValue, int $page): SearchRequest
+    {
+        $this->stateChanged = true;
+        $escapedValue = $this->getEscapedGroupItemValue($groupItemValue);
+        $path = $this->prefixWithNamespace('groupPage:' . $groupName . ':' . $escapedValue);
+        $this->argumentsAccessor->set($path, $page);
+        return $this;
+    }
+
+    /**
+     * Retrieves the current page for this group item.
+     *
+     * @param string $groupName
+     * @param string $groupItemValue
+     * @return int
+     */
+    public function getGroupItemPage(string $groupName, string $groupItemValue): int
+    {
+        $escapedValue = $this->getEscapedGroupItemValue($groupItemValue);
+        $path = $this->prefixWithNamespace('groupPage:' . $groupName . ':' . $escapedValue);
+        return max(1, (int)$this->argumentsAccessor->get($path));
+    }
+
+    /**
+     * Removes all non alphanumeric values from the groupItem value to have a valid array key.
+     *
+     * @param string $groupItemValue
+     * @return string
+     */
+    protected function getEscapedGroupItemValue(string $groupItemValue)
+    {
+        return preg_replace("/[^A-Za-z0-9]/", '', $groupItemValue);
+    }
+
+    /**
+     * Retrieves the highest page of the groups.
+     *
+     * @return int
+     */
+    public function getHighestGroupPage()
+    {
+        $max = 1;
+        $path = $this->prefixWithNamespace('groupPage');
+        $groupPages = $this->argumentsAccessor->get($path, []);
+        foreach ($groupPages as $groups) {
+            if (!is_array($groups)) continue;
+            foreach ($groups as $groupItemPage) {
+                if ($groupItemPage > $max) {
+                    $max = $groupItemPage;
+                }
+            }
+        }
+
+        return $max;
+    }
+
+    /**
      * Method to overwrite the query string.
      *
      * @param string $rawQueryString
@@ -424,18 +522,21 @@ class SearchRequest
     public function setRawQueryString($rawQueryString)
     {
         $this->stateChanged = true;
-        $this->argumentsAccessor->set('q', $rawQueryString);
+        $path = $this->prefixWithNamespace('q');
+        $this->argumentsAccessor->set($path, $rawQueryString);
         return $this;
     }
 
     /**
      * Returns the passed rawQueryString.
      *
-     * @return string
+     * @return string|null
      */
     public function getRawUserQuery()
     {
-        return $this->argumentsAccessor->get('q');
+        $path = $this->prefixWithNamespace('q');
+        $query = $this->argumentsAccessor->get($path, null);
+        return is_null($query) ? $query : (string)$query;
     }
 
     /**
@@ -447,7 +548,8 @@ class SearchRequest
      */
     public function getRawUserQueryIsEmptyString()
     {
-        $query = $this->argumentsAccessor->get('q', null);
+        $path = $this->prefixWithNamespace('q');
+        $query = $this->argumentsAccessor->get($path, null);
 
         if ($query === null) {
             return false;
@@ -468,7 +570,8 @@ class SearchRequest
      */
     public function getRawUserQueryIsNull()
     {
-        $query = $this->argumentsAccessor->get('q', null);
+        $path = $this->prefixWithNamespace('q');
+        $query = $this->argumentsAccessor->get($path, null);
         return $query === null;
     }
 
@@ -503,6 +606,32 @@ class SearchRequest
     {
         $path = $this->prefixWithNamespace('resultsPerPage');
         return $this->argumentsAccessor->get($path);
+    }
+
+    /**
+     * Allows to set additional filters that are used on time and not transported during the request.
+     *
+     * @param array $additionalFilters
+     * @return SearchRequest
+     */
+    public function setAdditionalFilters($additionalFilters)
+    {
+        $path = $this->prefixWithNamespace('additionalFilters');
+        $this->argumentsAccessor->set($path, $additionalFilters);
+        $this->stateChanged = true;
+
+        return $this;
+    }
+
+    /**
+     * Retrieves the addtional filters that have been set
+     *
+     * @return array
+     */
+    public function getAdditionalFilters()
+    {
+        $path = $this->prefixWithNamespace('additionalFilters');
+        return $this->argumentsAccessor->get($path, []);
     }
 
     /**
@@ -578,10 +707,27 @@ class SearchRequest
     }
 
     /**
+     * @return string
+     */
+    public function getArgumentNameSpace()
+    {
+        return $this->argumentNameSpace;
+    }
+
+    /**
      * @return array
      */
     public function getAsArray()
     {
         return $this->argumentsAccessor->getData();
+    }
+
+    /**
+     * Returns only the arguments as array.
+     *
+     * @return array
+     */
+    public function getArguments() {
+        return $this->argumentsAccessor->get($this->argumentNameSpace, []);
     }
 }

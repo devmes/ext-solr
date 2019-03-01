@@ -40,14 +40,11 @@ Configuration Reference
 
 	./Reference/TxSolr
 	./Reference/TxSolrGeneral
+	./Reference/TxSolrView
 	./Reference/TxSolrSolr
-	./Reference/TxSolrTemplateFiles
-	./Reference/TxSolrCssFiles
-	./Reference/TxSolrJavaScriptFiles
 	./Reference/TxSolrIndex
 	./Reference/TxSolrSearch
 	./Reference/TxSolrSuggest
 	./Reference/TxSolrStatistics
-	./Reference/TxSolrViewHelpers
 	./Reference/TxSolrLogging
 	./Reference/ExtensionSettings

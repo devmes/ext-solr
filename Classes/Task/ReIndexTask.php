@@ -12,7 +12,7 @@ namespace ApacheSolrForTypo3\Solr\Task;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -28,9 +28,7 @@ namespace ApacheSolrForTypo3\Solr\Task;
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
-use ApacheSolrForTypo3\Solr\Site;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Scheduler\Task\AbstractTask;
 
 /**
  * Scheduler task to empty the indexes of a site and re-initialize the
@@ -38,15 +36,8 @@ use TYPO3\CMS\Scheduler\Task\AbstractTask;
  *
  * @author Christoph Moeller <support@network-publishing.de>
  */
-class ReIndexTask extends AbstractTask
+class ReIndexTask extends AbstractSolrTask
 {
-
-    /**
-     * The site this task is supposed to initialize the index queue for.
-     *
-     * @var Site
-     */
-    protected $site;
 
     /**
      * Indexing configurations to re-initialize.
@@ -67,15 +58,12 @@ class ReIndexTask extends AbstractTask
         $cleanUpResult = $this->cleanUpIndex();
 
         // initialize for re-indexing
+            /** @var Queue $indexQueue */
         $indexQueue = GeneralUtility::makeInstance(Queue::class);
-        $indexQueueInitializationResults = [];
-        foreach ($this->indexingConfigurationsToReIndex as $indexingConfigurationName) {
-            $indexQueueInitializationResults = $indexQueue->initialize($this->site,
-                $indexingConfigurationName);
-        }
+        $indexQueueInitializationResults = $indexQueue->getInitializationService()
+            ->initializeBySiteAndIndexConfigurations($this->getSite(), $this->indexingConfigurationsToReIndex);
 
-        return ($cleanUpResult && !in_array(false,
-                $indexQueueInitializationResults));
+        return ($cleanUpResult && !in_array(false, $indexQueueInitializationResults));
     }
 
     /**
@@ -86,8 +74,8 @@ class ReIndexTask extends AbstractTask
     protected function cleanUpIndex()
     {
         $cleanUpResult = true;
-        $solrConfiguration = $this->site->getSolrConfiguration();
-        $solrServers = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionsBySite($this->site);
+        $solrConfiguration = $this->getSite()->getSolrConfiguration();
+        $solrServers = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionsBySite($this->getSite());
         $typesToCleanUp = [];
         $enableCommitsSetting = $solrConfiguration->getEnableCommits();
 
@@ -97,16 +85,15 @@ class ReIndexTask extends AbstractTask
         }
 
         foreach ($solrServers as $solrServer) {
-            $deleteQuery = 'type:(' . implode(' OR ', $typesToCleanUp) . ')'
-                . ' AND siteHash:' . $this->site->getSiteHash();
-            $solrServer->deleteByQuery($deleteQuery);
+            $deleteQuery = 'type:(' . implode(' OR ', $typesToCleanUp) . ')' . ' AND siteHash:' . $this->getSite()->getSiteHash();
+            $solrServer->getWriteService()->deleteByQuery($deleteQuery);
 
             if (!$enableCommitsSetting) {
                 # Do not commit
                 continue;
             }
 
-            $response = $solrServer->commit(false, false, false);
+            $response = $solrServer->getWriteService()->commit(false, false, false);
             if ($response->getHttpStatus() != 200) {
                 $cleanUpResult = false;
                 break;
@@ -114,26 +101,6 @@ class ReIndexTask extends AbstractTask
         }
 
         return $cleanUpResult;
-    }
-
-    /**
-     * Gets the site / the site's root page uid this task is running on.
-     *
-     * @return Site The site's root page uid this task is optimizing
-     */
-    public function getSite()
-    {
-        return $this->site;
-    }
-
-    /**
-     * Sets the task's site.
-     *
-     * @param Site $site The site to be handled by this task
-     */
-    public function setSite(Site $site)
-    {
-        $this->site = $site;
     }
 
     /**
@@ -151,9 +118,8 @@ class ReIndexTask extends AbstractTask
      *
      * @param array $indexingConfigurationsToReIndex
      */
-    public function setIndexingConfigurationsToReIndex(
-        array $indexingConfigurationsToReIndex
-    ) {
+    public function setIndexingConfigurationsToReIndex(array $indexingConfigurationsToReIndex)
+    {
         $this->indexingConfigurationsToReIndex = $indexingConfigurationsToReIndex;
     }
 
@@ -167,12 +133,12 @@ class ReIndexTask extends AbstractTask
      */
     public function getAdditionalInformation()
     {
-        $information = '';
-
-        if ($this->site) {
-            $information = 'Site: ' . $this->site->getLabel();
+        $site = $this->getSite();
+        if (is_null($site)) {
+            return 'Invalid site configuration for scheduler please re-create the task!';
         }
 
+        $information = 'Site: ' . $this->getSite()->getLabel();
         if (!empty($this->indexingConfigurationsToReIndex)) {
             $information .= ', Indexing Configurations: ' . implode(', ',
                     $this->indexingConfigurationsToReIndex);

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\FieldProcessor;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -65,7 +65,7 @@ class CategoryUidToHierarchy extends AbstractHierarchyProcessor implements Field
      */
     public function __construct(SystemCategoryRepository $systemCategoryRepository = null)
     {
-        $this->systemCategoryRepository = is_null($systemCategoryRepository) ? GeneralUtility::makeInstance(SystemCategoryRepository::class) : $systemCategoryRepository;
+        $this->systemCategoryRepository = $systemCategoryRepository ?? GeneralUtility::makeInstance(SystemCategoryRepository::class);
     }
 
     /**
@@ -91,7 +91,7 @@ class CategoryUidToHierarchy extends AbstractHierarchyProcessor implements Field
      * Returns a Solr hierarchy notation string for rootline of given category uid.
      *
      * @param int $categoryId Category ID to get a rootline as Solr hierarchy for
-     * @return string Rootline as Solr hierarchy
+     * @return array Rootline as Solr hierarchy array
      */
     protected function getSolrRootlineForCategoryId($categoryId)
     {

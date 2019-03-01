@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\System\Configuration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -87,7 +87,7 @@ class TypoScriptConfiguration
     {
         $this->configurationAccess = new ArrayAccessor($configuration, '.', true);
         $this->contextPageId = $contextPageId;
-        $this->contentObjectService = is_null($contentObjectService) ? GeneralUtility::makeInstance(ContentObjectService::class) : $contentObjectService;
+        $this->contentObjectService = $contentObjectService ?? GeneralUtility::makeInstance(ContentObjectService::class);
     }
 
     /**
@@ -278,21 +278,6 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Returns the configured css file for a specific fileKey.
-     *
-     * plugin.tx_solr.cssFiles.<fileKey>
-     *
-     * @param string $fileKey
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getCssFileByFileKey($fileKey, $defaultIfEmpty = '')
-    {
-        $cssFileName = $this->getValueByPathOrDefaultValue('plugin.tx_solr.cssFiles.' . $fileKey, $defaultIfEmpty);
-        return (string)$cssFileName;
-    }
-
-    /**
      * Returns the configured additionalFields configured for the indexing.
      *
      * plugin.tx_solr.index.additionalFields.
@@ -365,7 +350,7 @@ class TypoScriptConfiguration
     {
         $path = 'plugin.tx_solr.index.queue.' . $configurationName . '.additionalPageIds';
         $result = $this->getValueByPathOrDefaultValue($path, '');
-        if (trim($result) == '') {
+        if (trim($result) === '') {
             return $defaultIfEmpty;
         }
 
@@ -385,29 +370,11 @@ class TypoScriptConfiguration
     {
         $path = 'plugin.tx_solr.index.queue.' . $configurationName . '.allowedPageTypes';
         $result = $this->getValueByPathOrDefaultValue($path, '');
-        if (trim($result) == '') {
+        if (trim($result) === '') {
             return $defaultIfEmpty;
         }
 
         return GeneralUtility::trimExplode(',', $result);
-    }
-
-    /**
-     * Returns an array of all allowedPageTypes.
-     *
-     * plugin.tx_solr.index.queue.pages.allowedPageTypes
-     *
-     * @deprecated since 6.0 will be removed in 7.0
-     *
-     * @param array $defaultIfEmpty
-     * @return array
-     */
-    public function getIndexQueuePagesAllowedPageTypesArray($defaultIfEmpty = [])
-    {
-        return $this->getIndexQueueAllowedPageTypesArrayByConfigurationName(
-            'pages',
-            $defaultIfEmpty
-        );
     }
 
     /**
@@ -423,7 +390,7 @@ class TypoScriptConfiguration
         $path = 'plugin.tx_solr.index.queue.pages.excludeContentByClass';
         $result = $this->getValueByPathOrDefaultValue($path, '');
 
-        if (trim($result) == '') {
+        if (trim($result) === '') {
             return $defaultIfEmpty;
         }
 
@@ -477,7 +444,7 @@ class TypoScriptConfiguration
         foreach ($indexingConfigurations as $indexingConfigurationName) {
             $monitoredTable = $this->getIndexQueueTableNameOrFallbackToConfigurationName($indexingConfigurationName);
             $monitoredTables[] = $monitoredTable;
-            if ($monitoredTable == 'pages') {
+            if ($monitoredTable === 'pages') {
                 // when monitoring pages, also monitor creation of translations
                 $monitoredTables[] = 'pages_language_overlay';
             }
@@ -626,7 +593,7 @@ class TypoScriptConfiguration
             return '';
         }
 
-        return ' AND ' . $initialPagesAdditionalWhereClause;
+        return trim($initialPagesAdditionalWhereClause);
     }
 
     /**
@@ -667,7 +634,7 @@ class TypoScriptConfiguration
         $possibleConfigurations = [];
 
         foreach ($configuration as $configurationName => $indexingEnabled) {
-            $isObject = substr($configurationName, -1) == '.';
+            $isObject = substr($configurationName, -1) === '.';
             if ($isObject || !$indexingEnabled) {
                 continue;
             }
@@ -700,35 +667,6 @@ class TypoScriptConfiguration
         $className = $this->getValueByPathOrDefaultValue($path, $defaultIfEmpty);
 
         return $className;
-    }
-
-    /**
-     * Returns the configured javascript file for a specific fileKey.
-     *
-     * plugin.tx_solr.javascriptFiles.<fileKey>
-     *
-     * @param string $fileKey
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getJavaScriptFileByFileKey($fileKey, $defaultIfEmpty = '')
-    {
-        $javaScriptFileName = $this->getValueByPathOrDefaultValue('plugin.tx_solr.javascriptFiles.' . $fileKey, $defaultIfEmpty);
-        return (string)$javaScriptFileName;
-    }
-
-    /**
-     * Returns the configuration where to load the javascript
-     *
-     * plugin.tx_solr.javascriptFiles.loadIn
-     *
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getJavaScriptLoadIn($defaultIfEmpty = 'footer')
-    {
-        $loadIn = $this->getValueByPathOrDefaultValue('plugin.tx_solr.javascriptFiles.loadIn', $defaultIfEmpty);
-        return (string)$loadIn;
     }
 
     /**
@@ -986,12 +924,19 @@ class TypoScriptConfiguration
      *
      * plugin.tx_solr.solr.timeout
      *
-     * @param float $defaultIfEmpty
-     * @return float
+     * @param int $defaultIfEmpty
+     * @return int
      */
-    public function getSolrTimeout($defaultIfEmpty = 0.0)
+    public function getSolrTimeout($defaultIfEmpty = 0, $scope = 'read')
     {
-        return (float)$this->getValueByPathOrDefaultValue('plugin.tx_solr.solr.timeout', $defaultIfEmpty);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.timeout';
+        $fallbackPath = 'plugin.tx_solr.solr.timeout';
+        $result = (int)$this->getValueByPathOrDefaultValue($scopePath, -1);
+        if($result !== -1) {
+            return $result;
+        }
+
+        return (int)$this->getValueByPathOrDefaultValue($fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -1002,13 +947,15 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param string $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return string
      */
-    public function getSolrScheme($defaultIfEmpty = 'http')
+    public function getSolrScheme($defaultIfEmpty = 'http', $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.scheme';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        return $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.scheme';
+        $fallbackPath = 'plugin.tx_solr.solr.scheme';
+
+        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -1019,13 +966,15 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param string $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return string
      */
-    public function getSolrHost($defaultIfEmpty = 'localhost')
+    public function getSolrHost($defaultIfEmpty = 'localhost', $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.host';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        return $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.host';
+        $fallbackPath = 'plugin.tx_solr.solr.host';
+
+        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -1036,13 +985,15 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param int $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return int
      */
-    public function getSolrPort($defaultIfEmpty = 8983)
+    public function getSolrPort($defaultIfEmpty = 8983, $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.port';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        return $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.port';
+        $fallbackPath = 'plugin.tx_solr.solr.port';
+
+        return (int)$this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -1053,13 +1004,15 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param string $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return string
      */
-    public function getSolrPath($defaultIfEmpty = '/solr/core_en/')
+    public function getSolrPath($defaultIfEmpty = '/solr/core_en/', $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.path';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        $solrPath = $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.path';
+        $fallbackPath = 'plugin.tx_solr.solr.path';
+
+        $solrPath =  $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
 
         $solrPath = trim($solrPath, '/');
         $solrPath = '/' . $solrPath . '/';
@@ -1075,13 +1028,15 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param string $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return string
      */
-    public function getSolrUsername($defaultIfEmpty = '')
+    public function getSolrUsername($defaultIfEmpty = '', $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.username';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        return $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.username';
+        $fallbackPath = 'plugin.tx_solr.solr.username';
+
+        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -1092,13 +1047,32 @@ class TypoScriptConfiguration
      * Applies stdWrap on the configured setting
      *
      * @param string $defaultIfEmpty
+     * @param string $scope read or write, read by default
      * @return string
      */
-    public function getSolrPassword($defaultIfEmpty = '')
+    public function getSolrPassword($defaultIfEmpty = '', $scope = 'read')
     {
-        $valuePath = 'plugin.tx_solr.solr.password';
-        $value = (string)$this->getValueByPathOrDefaultValue($valuePath, $defaultIfEmpty);
-        return $this->renderContentElementOfConfigured($valuePath, $value);
+        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.password';
+        $fallbackPath = 'plugin.tx_solr.solr.password';
+
+        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
+    }
+
+    /**
+     * @param $path
+     * @param $fallbackPath
+     * @param $defaultIfBothIsEmpty
+     * @return mixed
+     */
+    public function getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($path, $fallbackPath, $defaultIfBothIsEmpty)
+    {
+        $result = (string)$this->getValueByPathOrDefaultValue($path, '');
+        if($result !== '') {
+            return $this->renderContentElementOfConfigured($path, $result);
+        }
+
+        $result = (string)$this->getValueByPathOrDefaultValue($fallbackPath, $defaultIfBothIsEmpty);
+        return $this->renderContentElementOfConfigured($fallbackPath, $result);
     }
 
     /**
@@ -1353,34 +1327,6 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Returns the search results fieldProcessingInstructions configuration array
-     *
-     * plugin.tx_solr.search.results.fieldProcessingInstructions.
-     *
-     * @param array $defaultIfEmpty
-     * @return array
-     */
-    public function getSearchResultsFieldProcessingInstructionsConfiguration(array $defaultIfEmpty = [])
-    {
-        $result = $this->getObjectByPathOrDefault('plugin.tx_solr.search.results.fieldProcessingInstructions.', $defaultIfEmpty);
-        return $result;
-    }
-
-    /**
-     * Returns the search results fieldRenderingInstructions configuration array
-     *
-     * plugin.tx_solr.search.results.fieldRenderingInstructions.
-     *
-     * @param array $defaultIfEmpty
-     * @return array
-     */
-    public function getSearchResultsFieldRenderingInstructionsConfiguration(array $defaultIfEmpty = [])
-    {
-        $result = $this->getObjectByPathOrDefault('plugin.tx_solr.search.results.fieldRenderingInstructions.', $defaultIfEmpty);
-        return $result;
-    }
-
-    /**
      * Indicates if the results of an initial empty query should be shown or not.
      *
      * plugin.tx_solr.search.showResultsOfInitialEmptyQuery
@@ -1457,28 +1403,13 @@ class TypoScriptConfiguration
 
         // if we have a concrete setting, use it
         if ($specificSortOrder !== null) {
-            return $specificSortOrder;
+            return mb_strtolower($specificSortOrder);
         }
 
         // no specific setting, check common setting
         $commonPath = 'plugin.tx_solr.search.sorting.defaultOrder';
         $commonATagParamOrDefaultValue = $this->getValueByPathOrDefaultValue($commonPath, $defaultIfEmpty);
-        return $commonATagParamOrDefaultValue;
-    }
-
-    /**
-     * Returns the configured fixedOrder, if nothing configured defaultIfEmpty will be returned.
-     *
-     * plugin.tx_solr.search.sorting.options.<sortOptionName>.fixedOrder
-     *
-     * @param string $sortOptionName
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getSearchSortingFixedOrderBySortOptionName($sortOptionName = '', $defaultIfEmpty = '')
-    {
-        $fixedOrder = 'plugin.tx_solr.search.sorting.options.' . $sortOptionName . '.fixedOrder';
-        return $this->getValueByPathOrDefaultValue($fixedOrder, $defaultIfEmpty);
+        return mb_strtolower($commonATagParamOrDefaultValue);
     }
 
     /**
@@ -1527,7 +1458,7 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Returns the fieldProcessingInstructions configuration array
+     * Returns the filter configuration array
      *
      * plugin.tx_solr.search.query.filter.
      *
@@ -1573,6 +1504,87 @@ class TypoScriptConfiguration
     public function getSearchQueryQueryFields($defaultIfEmpty = '')
     {
         return $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.queryFields', $defaultIfEmpty);
+    }
+
+    /**
+     * This method is used to check if a phrase search is enabled or not
+     *
+     * plugin.tx_solr.search.query.phrase = 1
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getPhraseSearchIsEnabled(bool $defaultIfEmpty = false)
+    {
+        $result = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.phrase', $defaultIfEmpty);
+        return $this->getBool($result);
+    }
+
+    /**
+     * Returns the configured phrase fields from TypoScript
+     *
+     * plugin.tx_solr.search.query.phrase.fields
+     *
+     * @param string $defaultIfEmpty
+     * @return string
+     */
+    public function getSearchQueryPhraseFields(string $defaultIfEmpty = '')
+    {
+        return $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.phrase.fields', $defaultIfEmpty);
+    }
+
+    /**
+     * This method is used to check if a bigram phrase search is enabled or not
+     *
+     * plugin.tx_solr.search.query.bigramPhrase = 1
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getBigramPhraseSearchIsEnabled(bool $defaultIfEmpty = false)
+    {
+        $result = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.bigramPhrase', $defaultIfEmpty);
+        return $this->getBool($result);
+    }
+
+    /**
+     * Returns the configured phrase fields from TypoScript
+     *
+     * plugin.tx_solr.search.query.bigramPhrase.fields
+     *
+     * @param string $defaultIfEmpty
+     * @return string
+     */
+    public function getSearchQueryBigramPhraseFields(string $defaultIfEmpty = '')
+    {
+        return $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.bigramPhrase.fields', $defaultIfEmpty);
+    }
+
+    /**
+     * This method is used to check if a trigram phrase search is enabled or not
+     *
+     * plugin.tx_solr.search.query.trigramPhrase = 1
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getTrigramPhraseSearchIsEnabled(bool $defaultIfEmpty = false)
+    {
+        $result = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.trigramPhrase', $defaultIfEmpty);
+        return $this->getBool($result);
+    }
+
+    /**
+     * Returns the configured trigram phrase fields from TypoScript
+     *
+     * plugin.tx_solr.search.query.trigramPhrase.fields
+     *
+     * @param string $defaultIfEmpty
+     * @return string
+     */
+    public function getSearchQueryTrigramPhraseFields(string $defaultIfEmpty = '')
+    {
+        return $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.query.trigramPhrase.fields', $defaultIfEmpty);
     }
 
     /**
@@ -1627,17 +1639,33 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Retrieves the pagebrowser configuration.
+     * Method to check if the site highlighting is enabled. When the siteHighlighting is enabled the
+     * sword_list parameter is added to the results link.
      *
-     * plugin.tx_solr.search.results.pagebrowser.
+     * plugin.tx_solr.searcb.results.siteHighlighting
      *
-     * @param array $defaultIfEmpty
-     * @return array
+     * @param bool $defaultIfEmpty
+     * @return bool
      */
-    public function getSearchResultsPageBrowserConfiguration(array $defaultIfEmpty = [])
+    public function getSearchResultsSiteHighlighting($defaultIfEmpty = true)
     {
-        $result = $this->getObjectByPathOrDefault('plugin.tx_solr.search.results.pagebrowser.', $defaultIfEmpty);
-        return $result;
+        $isSiteHightlightingEnabled = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.results.siteHighlighting', $defaultIfEmpty);
+        return $this->getBool($isSiteHightlightingEnabled);
+    }
+
+
+    /**
+     * Can be used to check if the highlighting is enabled
+     *
+     * plugin.tx_solr.search.results.resultsHighlighting
+     *
+     * @param boolean $defaultIfEmpty
+     * @return boolean
+     */
+    public function getSearchResultsHighlighting($defaultIfEmpty = false)
+    {
+        $isHighlightingEnabled = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.results.resultsHighlighting', $defaultIfEmpty);
+        return $this->getBool($isHighlightingEnabled);
     }
 
     /**
@@ -1670,6 +1698,19 @@ class TypoScriptConfiguration
         }
 
         return GeneralUtility::trimExplode(',', $highlightingFields, true);
+    }
+
+    /**
+     * Returns the fragmentSize for highlighted segments.
+     *
+     * plugin.tx_solr.search.results.resultsHighlighting.fragmentSize
+     *
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSearchResultsHighlightingFragmentSize($defaultIfEmpty = 200)
+    {
+        return (int)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.results.resultsHighlighting.fragmentSize', $defaultIfEmpty);
     }
 
     /**
@@ -1745,19 +1786,6 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Returns the wrap that should be used for spellchecking
-     *
-     * plugin.tx_solr.search.spellchecking.wrap
-     *
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getSearchSpellcheckingWrap($defaultIfEmpty = '')
-    {
-        return (string)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.spellchecking.wrap', $defaultIfEmpty);
-    }
-
-    /**
      * Returns the numberOfSuggestionsToTry that should be used for the spellchecking.
      *
      * plugin.tx_solr.search.spellchecking.numberOfSuggestionsToTry
@@ -1765,7 +1793,7 @@ class TypoScriptConfiguration
      * @param int $defaultIfEmpty
      * @return int
      */
-    public function getSearchSpellcheckingNumberOfSuggestionsToTry($defaultIfEmpty = 0)
+    public function getSearchSpellcheckingNumberOfSuggestionsToTry($defaultIfEmpty = 1)
     {
         return (int)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.spellchecking.numberOfSuggestionsToTry', $defaultIfEmpty);
     }
@@ -1796,50 +1824,6 @@ class TypoScriptConfiguration
     {
         $isFacetingEnabled = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.faceting', $defaultIfEmpty);
         return $this->getBool($isFacetingEnabled);
-    }
-
-    /**
-     * Retrieves the facetLinkATagParams for a facet by facet name. If nothing specific is configured
-     * the global facetLinkATagParams with be returned.
-     *
-     * plugin.tx_solr.search.faceting.facets.<facetName>.facetLinkATagParams
-     *
-     * or
-     *
-     * plugin.tx_solr.search.faceting.facetLinkATagParams
-     *
-     *
-     * @param string $facetName
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getSearchFacetingFacetLinkATagParamsByName($facetName = '', $defaultIfEmpty = '')
-    {
-        $facetSpecificPath = 'plugin.tx_solr.search.faceting.facets.' . $facetName . '.facetLinkATagParams';
-        $specificATagParam = $this->getValueByPathOrDefaultValue($facetSpecificPath, null);
-
-            // if we have a concrete setting, use it
-        if ($specificATagParam !== null) {
-            return $specificATagParam;
-        }
-
-            // no specific setting, check common setting
-        $commonPath = 'plugin.tx_solr.search.faceting.facetLinkATagParams';
-        $commonATagParamOrDefaultValue = $this->getValueByPathOrDefaultValue($commonPath, $defaultIfEmpty);
-        return $commonATagParamOrDefaultValue;
-    }
-
-    /**
-     * Returns the test that should be used to remove a faceting link
-     *
-     * plugin.tx_solr.search.faceting.removeFacetLinkText
-     *
-     * @param string $defaultIfEmpty
-     * @return string
-     */
-    public function getSearchFacetingRemoveFacetLinkText($defaultIfEmpty = '@facetLabel: @facetText')
-    {
-        return (string)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.faceting.removeFacetLinkText', $defaultIfEmpty);
     }
 
     /**
@@ -1973,20 +1957,6 @@ class TypoScriptConfiguration
     }
 
     /**
-     * Returns if the singleFacetMode is active or not.
-     *
-     * plugin.tx_solr.search.faceting.singleFacetMode
-     *
-     * @param bool $defaultIfEmpty
-     * @return bool
-     */
-    public function getSearchFacetingSingleFacetMode($defaultIfEmpty = false)
-    {
-        $singleFacetMode = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.faceting.singleFacetMode', $defaultIfEmpty);
-        return $this->getBool($singleFacetMode);
-    }
-
-    /**
      * Return the configured faceting sortBy value.
      *
      * plugin.tx_solr.search.faceting.sortBy
@@ -2013,6 +1983,21 @@ class TypoScriptConfiguration
     {
         $keepAllOptionsOnSelection = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.faceting.keepAllFacetsOnSelection', $defaultIfEmpty);
         return $this->getBool($keepAllOptionsOnSelection);
+    }
+
+    /**
+     * Returns if the facet count should be calculated based on the facet selection when
+     * plugin.tx_solr.search.faceting.keepAllFacetsOnSelection has been enabled
+     *
+     * plugin.tx_solr.search.faceting.countAllFacetsForSelection
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getSearchFacetingCountAllFacetsForSelection($defaultIfEmpty = false)
+    {
+        $countAllFacetsForSelection = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.faceting.countAllFacetsForSelection', $defaultIfEmpty);
+        return $this->getBool($countAllFacetsForSelection);
     }
 
     /**
@@ -2113,18 +2098,92 @@ class TypoScriptConfiguration
     }
 
     /**
+     * Returns the allowed number of suggestions.
+     *
+     * plugin.tx_solr.suggest.numberOfSuggestions
+     *
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSuggestNumberOfSuggestions($defaultIfEmpty = 10)
+    {
+        $numberOfSuggestions = $this->getValueByPathOrDefaultValue('plugin.tx_solr.suggest.numberOfSuggestions', $defaultIfEmpty);
+        return (int)$numberOfSuggestions;
+    }
+
+    /**
+     * Indicates if the topResults should be shown or not
+     *
+     * plugin.tx_solr.suggest.showTopResults
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getSuggestShowTopResults($defaultIfEmpty = true)
+    {
+        $showTopResults = $this->getValueByPathOrDefaultValue('plugin.tx_solr.suggest.showTopResults', $defaultIfEmpty);
+        return $this->getBool($showTopResults);
+    }
+
+    /**
+     * Returns the configured number of top results to show
+     *
+     * plugin.tx_solr.suggest.numberOfTopResults
+     *
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSuggestNumberOfTopResults($defaultIfEmpty = 5)
+    {
+        $numberOfTopResults = $this->getValueByPathOrDefaultValue('plugin.tx_solr.suggest.numberOfTopResults', $defaultIfEmpty);
+        return (int)$numberOfTopResults;
+    }
+
+    /**
+     * Returns additional fields for the top results
+     *
+     * plugin.tx_solr.suggest.additionalTopResultsFields
+     *
+     * @param array $defaultIfEmpty
+     * @return array
+     */
+    public function getSuggestAdditionalTopResultsFields($defaultIfEmpty = [])
+    {
+        $additionalTopResultsFields = $this->getValueByPathOrDefaultValue('plugin.tx_solr.suggest.additionalTopResultsFields', '');
+        if ($additionalTopResultsFields === '') {
+            return $defaultIfEmpty;
+        }
+
+        return GeneralUtility::trimExplode(',', $additionalTopResultsFields, true);
+    }
+
+    /**
      * Returns the configured template for a specific template fileKey.
      *
-     * plugin.tx_solr.search.templateFiles.<fileKey>
+     * plugin.tx_solr.view.templateFiles.<fileKey>
      *
      * @param string $fileKey
      * @param string $defaultIfEmpty
      * @return string
      */
-    public function getTemplateByFileKey($fileKey, $defaultIfEmpty = '')
+    public function getViewTemplateByFileKey($fileKey, $defaultIfEmpty = '')
     {
-        $templateFileName = $this->getValueByPathOrDefaultValue('plugin.tx_solr.templateFiles.' . $fileKey, $defaultIfEmpty);
+        $templateFileName = $this->getValueByPathOrDefaultValue('plugin.tx_solr.view.templateFiles.' . $fileKey, $defaultIfEmpty);
         return (string)$templateFileName;
+    }
+
+    /**
+     * Returns the configured available template files for the flexform.
+     *
+     * plugin.tx_solr.view.templateFiles.[fileKey].availableTemplates.
+     *
+     * @param string $fileKey
+     * @return array
+     */
+    public function getAvailableTemplatesByFileKey($fileKey)
+    {
+        $path = 'plugin.tx_solr.view.templateFiles.' . $fileKey . '.availableTemplates.';
+        return (array)$this->getObjectByPathOrDefault($path, []);
     }
 
     /**
@@ -2172,6 +2231,170 @@ class TypoScriptConfiguration
     {
         $enableCommits = $this->getValueByPathOrDefaultValue('plugin.tx_solr.index.enableCommits', $defaultIfEmpty);
         return $this->getBool($enableCommits);
+    }
+
+    /**
+     * Returns the url namespace that is used for the arguments.
+     *
+     * plugin.tx_solr.view.pluginNamespace
+     *
+     * @param string $defaultIfEmpty
+     * @return string
+     */
+    public function getSearchPluginNamespace($defaultIfEmpty = 'tx_solr')
+    {
+        return $this->getValueByPathOrDefaultValue('plugin.tx_solr.view.pluginNamespace', $defaultIfEmpty);
+    }
+
+    /**
+     * Returns true if the global url parameter q, that indicates the query should be used.
+     *
+     * Should be set to false, when multiple instance on the same page should have their querystring.
+     *
+     * plugin.tx_solr.search.ignoreGlobalQParameter
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getSearchIgnoreGlobalQParameter($defaultIfEmpty = false)
+    {
+        $enableQParameter = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.ignoreGlobalQParameter', $defaultIfEmpty);
+        return $this->getBool($enableQParameter);
+
+    }
+
+    /**
+     * Returns the argument names, that should be added to the persistent arguments, as array.
+     *
+     * plugin.tx_solr.search.additionalPersistentArgumentNames
+     *
+     * @param array $defaultIfEmpty
+     * @return array
+     */
+    public function getSearchAdditionalPersistentArgumentNames($defaultIfEmpty = [])
+    {
+        $additionalPersistentArgumentNames = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.additionalPersistentArgumentNames', '');
+
+        if ($additionalPersistentArgumentNames === '') {
+            return $defaultIfEmpty;
+        }
+
+        return GeneralUtility::trimExplode(',', $additionalPersistentArgumentNames, true);
+
+    }
+
+    /**
+     * Method to check if grouping was enabled with typoscript.
+     *
+     * plugin.tx_solr.search.grouping
+     *
+     * @param bool $defaultIfEmpty
+     * @return bool
+     */
+    public function getSearchGrouping($defaultIfEmpty = false)
+    {
+        $groupingEnabled = $this->getValueByPathOrDefaultValue('plugin.tx_solr.search.grouping', $defaultIfEmpty);
+        return $this->getBool($groupingEnabled);
+    }
+
+    /**
+     * Returns the configured numberOfGroups.
+     *
+     * plugin.tx_solr.search.grouping.numberOfGroups
+     *
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSearchGroupingNumberOfGroups($defaultIfEmpty = 5)
+    {
+        return (int)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.grouping.numberOfGroups', $defaultIfEmpty);
+    }
+
+    /**
+     * Returns the sortBy configuration for the grouping.
+     *
+     * plugin.tx_solr.search.grouping.sortBy
+     *
+     * @param string $defaultIfEmpty
+     * @return string
+     */
+    public function getSearchGroupingSortBy($defaultIfEmpty = '')
+    {
+        return (string)$this->getValueByPathOrDefaultValue('plugin.tx_solr.search.grouping.sortBy', $defaultIfEmpty);
+    }
+
+    /**
+     * Returns the highestValue of the numberOfResultsPerGroup configuration that is globally configured and
+     * for each group.
+     *
+     * plugin.tx_solr.search.grouping.
+     *
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSearchGroupingHighestGroupResultsLimit($defaultIfEmpty = 1)
+    {
+        $groupingConfiguration = $this->getObjectByPathOrDefault('plugin.tx_solr.search.grouping.', []);
+        $highestLimit = $defaultIfEmpty;
+        if (!empty($groupingConfiguration['numberOfResultsPerGroup'])) {
+            $highestLimit = $groupingConfiguration['numberOfResultsPerGroup'];
+        }
+
+        $configuredGroups = $groupingConfiguration['groups.'];
+        if (!is_array($configuredGroups)) {
+            return $highestLimit;
+        }
+
+        foreach ($configuredGroups as $groupName => $groupConfiguration) {
+            if (!empty($groupConfiguration['numberOfResultsPerGroup']) && $groupConfiguration['numberOfResultsPerGroup'] > $highestLimit) {
+                $highestLimit = $groupConfiguration['numberOfResultsPerGroup'];
+            }
+        }
+
+        return $highestLimit;
+    }
+
+    /**
+     * Returns the valid numberOfResultsPerGroup value for a group.
+     *
+     * Returns:
+     *
+     * plugin.tx_solr.search.grouping.groups.<groupName>.numberOfResultsPerGroup if it is set otherwise
+     * plugin.tx_solr.search.grouping.numberOfResultsPerGroup
+     *
+     * @param string $groupName
+     * @param int $defaultIfEmpty
+     * @return int
+     */
+    public function getSearchGroupingResultLimit($groupName, $defaultIfEmpty = 1)
+    {
+        $specificPath = 'plugin.tx_solr.search.grouping.groups.' . $groupName . 'numberOfResultsPerGroup';
+        $specificResultsPerGroup = $this->getValueByPathOrDefaultValue($specificPath, null);
+
+        if ($specificResultsPerGroup !== null) {
+            return (int) $specificResultsPerGroup;
+        }
+
+        $commonPath = 'plugin.tx_solr.search.grouping.numberOfResultsPerGroup';
+        $commonValue = $this->getValueByPathOrDefaultValue($commonPath, null);
+        if ($commonValue !== null) {
+            return (int) $commonValue;
+        }
+
+        return $defaultIfEmpty;
+    }
+
+    /**
+     * Returns everything that is configured for the groups (plugin.tx_solr.search.grouping.groups.)
+     *
+     * plugin.tx_solr.search.grouping.groups.
+     *
+     * @param array $defaultIfEmpty
+     * @return array
+     */
+    public function getSearchGroupingGroupsConfiguration($defaultIfEmpty = [])
+    {
+        return $this->getObjectByPathOrDefault('plugin.tx_solr.search.grouping.groups.', $defaultIfEmpty);
     }
 
     /*

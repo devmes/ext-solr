@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Search\ApacheSolrDocu
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,6 +25,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Search\ApacheSolrDocu
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Domain\Search\ApacheSolrDocument\Repository;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
 use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -38,6 +39,8 @@ class ApacheSolrDocumentRepositoryTest extends IntegrationTest
     public function setUp()
     {
         parent::setUp();
+        $_SERVER['HTTP_HOST'] = 'test.local.typo3.org';
+        $_SERVER['REQUEST_URI'] = '/search.html';
         // trigger a search
         $this->indexPageIdsFromFixture('can_get_apacheSolrDocuments.xml', [1, 2, 3, 4, 5]);
 
@@ -63,9 +66,9 @@ class ApacheSolrDocumentRepositoryTest extends IntegrationTest
     {
         $apacheSolrDocumentsCollection = $this->apacheSolrDocumentRepository->findByPageIdAndByLanguageId(3, 0);
 
-        $this->assertInternalType('array', $apacheSolrDocumentsCollection, 'Repository did not get Apache_Solr_Document collection from pageId 3.');
+        $this->assertInternalType('array', $apacheSolrDocumentsCollection, 'Repository did not get Document collection from pageId 3.');
         $this->assertNotEmpty($apacheSolrDocumentsCollection, 'Repository did not get apache solr documents from pageId 3.');
-        $this->assertInstanceOf(\Apache_Solr_Document::class, $apacheSolrDocumentsCollection[0], 'ApacheSolrDocumentRepository returned not an array of type Apache_Solr_Document.');
+        $this->assertInstanceOf(Document::class, $apacheSolrDocumentsCollection[0], 'ApacheSolrDocumentRepository returned not an array of type Document.');
     }
 
     /**

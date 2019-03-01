@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\FieldProcessor;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,6 +25,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\FieldProcessor;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\FieldProcessor\Service;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
 use ApacheSolrForTypo3\Solr\Tests\Unit\UnitTest;
 
 /**
@@ -36,7 +37,7 @@ class ServiceTest extends UnitTest
 {
 
     /**
-     * @var Apache_Solr_Document
+     * @var Document
      */
     protected $documentMock;
 
@@ -50,7 +51,7 @@ class ServiceTest extends UnitTest
     public function setUp()
     {
         date_default_timezone_set('Europe/Berlin');
-        $this->documentMock = new \Apache_Solr_Document();
+        $this->documentMock = new Document();
         $this->service = new Service();
     }
 
@@ -63,9 +64,8 @@ class ServiceTest extends UnitTest
         $configuration = ['stringField' => 'uppercase'];
 
         $this->service->processDocument($this->documentMock, $configuration);
-        $value = $this->documentMock->getField('stringField');
         $this->assertEquals(
-            $value['value'],
+            $this->documentMock['stringField'],
             'STRINGVALUE',
             'field was not processed with uppercase'
         );
@@ -81,9 +81,8 @@ class ServiceTest extends UnitTest
         $configuration = ['stringField' => 'uppercase'];
 
         $this->service->processDocument($this->documentMock, $configuration);
-        $value = $this->documentMock->getField('stringField');
         $this->assertEquals(
-            $value['value'],
+            $this->documentMock['stringField'],
             ['STRINGVALUE_1', 'STRINGVALUE_2'],
             'field was not processed with uppercase'
         );
@@ -99,9 +98,8 @@ class ServiceTest extends UnitTest
         $configuration = ['dateField' => 'timestampToIsoDate'];
 
         $this->service->processDocument($this->documentMock, $configuration);
-        $value = $this->documentMock->getField('dateField');
         $this->assertEquals(
-            $value['value'],
+            $this->documentMock['dateField'],
             '2010-01-01T12:00:00Z',
             'field was not processed with timestampToIsoDate'
         );
@@ -119,9 +117,8 @@ class ServiceTest extends UnitTest
         $configuration = ['dateField' => 'timestampToIsoDate'];
 
         $this->service->processDocument($this->documentMock, $configuration);
-        $value = $this->documentMock->getField('dateField');
         $this->assertEquals(
-            $value['value'],
+            $this->documentMock['dateField'],
             ['2010-01-01T12:00:00Z', '2010-01-01T12:00:01Z'],
             'field was not processed with timestampToIsoDate'
         );

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,7 +24,9 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Query;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Boosting search component
@@ -42,35 +44,36 @@ class RelevanceComponent extends AbstractComponent implements QueryAware
     protected $query;
 
     /**
+     * QueryBuilder
+     *
+     * @var QueryBuilder|object
+     */
+    protected $queryBuilder;
+
+    /**
+     * AccessComponent constructor.
+     * @param QueryBuilder|null
+     */
+    public function __construct(QueryBuilder $queryBuilder = null)
+    {
+        $this->queryBuilder = $queryBuilder ?? GeneralUtility::makeInstance(QueryBuilder::class);
+    }
+
+    /**
      * Initializes the search component.
      *
-     * Sets minimum match, boost function, and boost query.
+     * Sets minimum match, boost function, boost query and tie breaker.
      *
      */
     public function initializeSearchComponent()
     {
-        if (!empty($this->searchConfiguration['query.']['minimumMatch'])) {
-            $this->query->setMinimumMatch($this->searchConfiguration['query.']['minimumMatch']);
-        }
-
-        if (!empty($this->searchConfiguration['query.']['boostFunction'])) {
-            $this->query->setBoostFunction($this->searchConfiguration['query.']['boostFunction']);
-        }
-
-        if (!empty($this->searchConfiguration['query.']['boostQuery'])) {
-            $this->query->setBoostQuery($this->searchConfiguration['query.']['boostQuery']);
-        }
-
-        if (!empty($this->searchConfiguration['query.']['boostQuery.'])) {
-            $boostQueries = [];
-            $boostConfiguration = $this->searchConfiguration['query.']['boostQuery.'];
-
-            foreach ($boostConfiguration as $query) {
-                $boostQueries[] = $query;
-            }
-
-            $this->query->setBoostQuery($boostQueries);
-        }
+        $this->query = $this->queryBuilder->startFrom($this->query)
+                            ->useMinimumMatchFromTypoScript()
+                            ->useBoostFunctionFromTypoScript()
+                            ->useSlopsFromTypoScript()
+                            ->useBoostQueriesFromTypoScript()
+                            ->useTieParameterFromTypoScript()
+                            ->getQuery();
     }
 
     /**

@@ -5,10 +5,31 @@
 			<generator>LFEditor</generator>
 		</header>
 		<body>
+
 			<trans-unit id="cache_initialize_solr_connections" xml:space="preserve">
 				<source>Initialize Solr connections</source>
 			</trans-unit>
-			<!-- From Backend/locallang.xlf //-->
+
+		<!-- Index Administration -->
+			<trans-unit id="solr.backend.index_administration.description" xml:space="preserve">
+				<source>The Index Administration Module is responsible for emptying the cores(deleting documents) on Solr Server and index queues in TYPO3 CMS. </source>
+			</trans-unit>
+
+			<trans-unit id="solr.backend.index_administration.index_emptied_all" xml:space="preserve">
+				<source>Index emptied for Site "%s" (%s).</source>
+			</trans-unit>
+
+			<trans-unit id="solr.backend.index_administration.success.queue_emptied" xml:space="preserve">
+				<source>Index Queue emptied for Site "%s".</source>
+			</trans-unit>
+
+			<trans-unit id="solr.backend.index_administration.error.on_empty_index" xml:space="preserve">
+				<source>An error occurred while trying to delete documents from the index: %s</source>
+			</trans-unit>
+		<!-- End: Index Maintenance -->
+
+
+		<!-- From Backend/locallang.xlf //-->
 			<trans-unit id="module_indexinspector" xml:space="preserve">
 				<source>Search Index Inspector</source>
 			</trans-unit>
@@ -18,6 +39,30 @@
 			<trans-unit id="plugin_results_description" xml:space="preserve">
 				<source>A search form and results list.</source>
 			</trans-unit>
+
+		<!-- Backend Components -->
+			<!-- SiteSelector -->
+			<trans-unit id="siteselector_switched_successfully" xml:space="preserve">
+				<source>Successfully switched to Site "%s".</source>
+			</trans-unit>
+
+			<trans-unit id="siteselector_switched_to_first_available_site" xml:space="preserve">
+				<source>The previously selected Site "%s" does not exist or the indexing for that Site was disabled. Switched to "%s", which was the first available one.</source>
+			</trans-unit>
+
+			<trans-unit id="siteselector_site_does_not_exist_anymore" xml:space="preserve">
+				<source>Couldn't switch to the Site "%s". This site does not exist anymore or the indexing for that Site was disabled. Switched to the first available Site "%s".</source>
+			</trans-unit>
+
+			<!-- CoreSelector -->
+			<trans-unit id="coreselector_switched_to_default_core" xml:space="preserve">
+				<source>The previously selected core "%s" is not available in "%s" site, therefore switched to default core "%s".</source>
+			</trans-unit>
+
+			<trans-unit id="coreselector_switched_successfully" xml:space="preserve">
+				<source>Successfully switched to core "%s".</source>
+			</trans-unit>
+		<!-- End: Backend Components -->
 
 			<!-- From ModuleAdministration/locallang.xlf //-->
 			<trans-unit id="mlang_labels_tablabel" xml:space="preserve">
@@ -113,11 +158,17 @@
 			<trans-unit id="faceting_removeAllFilters" xml:space="preserve">
 				<source>Remove all filters</source>
 			</trans-unit>
+			<trans-unit id="faceting_filter" xml:space="preserve">
+				<source>Filter</source>
+			</trans-unit>
 			<trans-unit id="results_range" xml:space="preserve">
 				<source>Displaying results @resultsFrom to @resultsTo of @resultsTotal.</source>
 			</trans-unit>
 			<trans-unit id="results_found" xml:space="preserve">
 				<source>Found @resultsTotal results in @resultsTime milliseconds.</source>
+			</trans-unit>
+			<trans-unit id="results_found.singular" xml:space="preserve">
+				<source>Found 1 result in @resultsTime milliseconds.</source>
 			</trans-unit>
 			<trans-unit id="results_searched_for" xml:space="preserve">
 				<source>Searched for &quot;@searchWord&quot;.</source>
@@ -126,7 +177,7 @@
 				<source>Nothing found for &quot;@searchWord&quot;.</source>
 			</trans-unit>
 			<trans-unit id="no_results_showing_results_suggestion" xml:space="preserve">
-				<source>Showing results for &quot;@suggestedWord&quot;</source>
+				<source>Showing results for &quot;@suggestedWord&quot;.</source>
 			</trans-unit>
 			<trans-unit id="no_results_search_for_original" xml:space="preserve">
 				<source>Search instead for &quot;@searchWord&quot;.</source>
@@ -170,7 +221,9 @@
 			<trans-unit id="pagebrowser_last" xml:space="preserve">
 				<source>Last</source>
 			</trans-unit>
-
+			<trans-unit id="suggest_header" xml:space="preserve">
+				<source>Top Results</source>
+			</trans-unit>
 			<!-- From locallang.xlf -->
 			<trans-unit id="solr.backend.index_queue_module.description" xml:space="preserve">
 				<source>The Index Queue manages content indexing. Content enters the Index Queue by initialization below or when new content is created based on configuration. Items in the Index Queue are indexed newest changes first until all items in the queue have been indexed.</source>
@@ -199,9 +252,13 @@
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.error.reset_errors" xml:space="preserve">
 				<source>An error occurred while resetting the error log in the index queue.</source>
 			</trans-unit>
+			<trans-unit id="solr.backend.index_queue_module.flashmessage.error.single_item_not_requeued" xml:space="preserve">
+				<source>Single item was not requeued.</source>
+			</trans-unit>
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.initialize.no_selection" xml:space="preserve">
 				<source>No indexing configurations selected.</source>
 			</trans-unit>
+
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.initialize.success" xml:space="preserve">
 				<source>Initialized indexing configurations: %s</source>
 			</trans-unit>
@@ -215,7 +272,10 @@
 				<source>All errors have been reset.</source>
 			</trans-unit>
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.success.index_manual" xml:space="preserve">
-				<source>Indexing from the backend was finished successful.</source>
+				<source>Indexing from the backend was successfully finished.</source>
+			</trans-unit>
+			<trans-unit id="solr.backend.index_queue_module.flashmessage.success.single_item_was_requeued" xml:space="preserve">
+				<source>Single item was successfully marked for reindexing.</source>
 			</trans-unit>
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.title" xml:space="preserve">
 				<source>Index Queue</source>
@@ -247,11 +307,8 @@
 			<trans-unit id="solr.backend.index_queue_module.button.clear_index_queue" xml:space="preserve">
 				<source>Clear Index Queue</source>
 			</trans-unit>
-			<trans-unit id="solr.backend.danger_zone" xml:space="preserve">
-				<source>Danger Zone</source>
-			</trans-unit>
 			<trans-unit id="solr.backend.index_queue_module.back" xml:space="preserve">
-				<source>&lt; Go back</source>
+				<source>Go back</source>
 			</trans-unit>
 			<trans-unit id="solr.backend.index_queue_module.flashmessage.error.no_queue_item_for_queue_error" xml:space="preserve">
 				<source>No valid queue item passed to show the error information!</source>

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,7 +24,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\ResultsetModifier\LastSearches;
+use ApacheSolrForTypo3\Solr\Domain\Search\LastSearches\LastSearchesWriterProcessor;
 
 /**
  * Last searches search component
@@ -41,7 +41,7 @@ class LastSearchesComponent extends AbstractComponent
     public function initializeSearchComponent()
     {
         if ($this->searchConfiguration['lastSearches']) {
-            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['modifyResultSet']['lastSearches'] = LastSearches::class;
+            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['afterSearch']['lastSearches'] = LastSearchesWriterProcessor::class;
         }
     }
 }

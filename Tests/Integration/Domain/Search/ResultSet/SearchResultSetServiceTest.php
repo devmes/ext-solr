@@ -1,5 +1,4 @@
 <?php
-
 namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Search\ResultSet;
 
 /***************************************************************
@@ -11,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Search\ResultSet;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -31,6 +30,7 @@ use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequest;
 use ApacheSolrForTypo3\Solr\Search;
 use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
 use ApacheSolrForTypo3\Solr\Util;
+use TYPO3\CMS\Core\Http\ImmediateResponseException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 class SearchResultSetServiceTest extends IntegrationTest
@@ -56,7 +56,7 @@ class SearchResultSetServiceTest extends IntegrationTest
         $this->waitToBeVisibleInSolr();
 
         $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
-        $this->assertContains('b8c8d04e66c58f01283ef81a4ded197f26ab402a/pages/1/0/0/0', $solrContent);
+        $this->assertContains('23c51a0d5cf548afecc043a7068902e8f82a22a0/pages/1/0/0/0', $solrContent);
 
         $solrConnection = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId(1, 0, 0);
 
@@ -65,7 +65,7 @@ class SearchResultSetServiceTest extends IntegrationTest
         $search = GeneralUtility::makeInstance(Search::class, $solrConnection);
         /** @var $searchResultsSetService SearchResultSetService */
         $searchResultsSetService = GeneralUtility::makeInstance(SearchResultSetService::class, $typoScriptConfiguration, $search);
-        $document = $searchResultsSetService->getDocumentById('b8c8d04e66c58f01283ef81a4ded197f26ab402a/pages/1/0/0/0');
+        $document = $searchResultsSetService->getDocumentById('23c51a0d5cf548afecc043a7068902e8f82a22a0/pages/1/0/0/0');
 
         $this->assertSame($document->getTitle(), 'Products', 'Could not get document from solr by id');
     }
@@ -144,12 +144,14 @@ class SearchResultSetServiceTest extends IntegrationTest
      */
     public function cantGetHiddenElementWithoutPermissions()
     {
+        $this->applyUsingErrorControllerForCMS9andAbove();
         $this->importFrontendRestrictedPageScenario();
+
 
         $solrConnection = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId(1, 0, 0);
         $typoScriptConfiguration = Util::getSolrConfiguration();
 
-            // only the default group
+        // only the default group
         $this->simulateFrontedUserGroups([0]);
         $searchResults = $this->doSearchWithResultSetService($solrConnection, $typoScriptConfiguration);
 
@@ -161,16 +163,19 @@ class SearchResultSetServiceTest extends IntegrationTest
      */
     public function canGetHiddenElementWithPermissions()
     {
+        $this->applyUsingErrorControllerForCMS9andAbove();
         $this->importFrontendRestrictedPageScenario();
 
         $solrConnection = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId(1, 0, 0);
         $typoScriptConfiguration = Util::getSolrConfiguration();
 
-            // user group 0 and 1 should see all elements
+        // user group 0 and 1 should see all elements
         $this->simulateFrontedUserGroups([0, 1]);
         $searchResults = $this->doSearchWithResultSetService($solrConnection, $typoScriptConfiguration);
 
         $this->assertSame(3, count($searchResults), 'We should see all content, because nothing should be filtered');
+
+
     }
 
     /**
@@ -197,8 +202,9 @@ class SearchResultSetServiceTest extends IntegrationTest
         $searchResultsSetService = GeneralUtility::makeInstance(SearchResultSetService::class, $typoScriptConfiguration, $search);
 
         /** @var $searchRequest SearchRequest */
-        $searchRequest = GeneralUtility::makeInstance(SearchRequest::class);
+        $searchRequest = GeneralUtility::makeInstance(SearchRequest::class, [], 0, 0, $typoScriptConfiguration);
         $searchRequest->setRawQueryString($queryString);
+        $searchRequest->setResultsPerPage(10);
 
         $searchResultSet = $searchResultsSetService->search($searchRequest);
 

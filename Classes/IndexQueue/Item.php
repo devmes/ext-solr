@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,8 +24,10 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\Domain\Index\Queue\IndexQueueIndexingPropertyRepository;
+use ApacheSolrForTypo3\Solr\Domain\Index\Queue\QueueItemRepository;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -33,10 +35,17 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * Representation of an index queue item, carrying meta data and the record to be
  * indexed.
  *
+ * @todo: Loose coupling from Repos
+ *
  * @author Ingo Renner <ingo@typo3.org>
  */
 class Item
 {
+    const STATE_BLOCKED = -1;
+
+    const STATE_PENDING = 0;
+
+    const STATE_INDEXED = 1;
 
     /**
      * The item's uid in the index queue (tx_solr_indexqueue_item.uid)
@@ -75,6 +84,13 @@ class Item
     protected $changed;
 
     /**
+     * The unix timestamp when the record was last indexed (tx_solr_indexqueue_item.indexed)
+     *
+     * @var int
+     */
+    protected $indexed;
+
+    /**
      * Indexing properties to provide additional information for the item's
      * indexer / how to index the item.
      *
@@ -111,25 +127,43 @@ class Item
     protected $record;
 
     /**
+     * Moint point identifier.
+     *
+     * @var string
+     */
+    protected $mountPointIdentifier;
+
+    /**
      * @var string
      */
     protected $errors = '';
+
+    /**
+     * @var IndexQueueIndexingPropertyRepository
+     */
+    protected $indexQueueIndexingPropertyRepository;
+
+    /**
+     * @var QueueItemRepository
+     */
+    protected $queueItemRepository;
 
     /**
      * Constructor, takes item meta data information and resolves that to the full record.
      *
      * @param array $itemMetaData Metadata describing the item to index using the index queue. Is expected to contain a record from table tx_solr_indexqueue_item
      * @param array $fullRecord Optional full record for the item. If provided, can save some SQL queries.
+     * @param IndexQueueIndexingPropertyRepository|null $indexQueueIndexingPropertyRepository
      */
-    public function __construct(
-        array $itemMetaData,
-        array $fullRecord = []
-    ) {
+    public function __construct(array $itemMetaData, array $fullRecord = [], IndexQueueIndexingPropertyRepository $indexQueueIndexingPropertyRepository = null, QueueItemRepository $queueItemRepository = null)
+    {
         $this->indexQueueUid = $itemMetaData['uid'];
         $this->rootPageUid = $itemMetaData['root'];
         $this->type = $itemMetaData['item_type'];
         $this->recordUid = $itemMetaData['item_uid'];
+        $this->mountPointIdentifier = (string) empty($itemMetaData['pages_mountidentifier']) ? '' : $itemMetaData['pages_mountidentifier'];
         $this->changed = $itemMetaData['changed'];
+        $this->indexed = $itemMetaData['indexed'];
         $this->errors = (string) empty($itemMetaData['errors']) ? '' : $itemMetaData['errors'];
 
         $this->indexingConfigurationName = $itemMetaData['indexing_configuration'];
@@ -138,10 +172,15 @@ class Item
         if (!empty($fullRecord)) {
             $this->record = $fullRecord;
         }
+
+        $this->indexQueueIndexingPropertyRepository = $indexQueueIndexingPropertyRepository ?? GeneralUtility::makeInstance(IndexQueueIndexingPropertyRepository::class);
+        $this->queueItemRepository = $queueItemRepository ?? GeneralUtility::makeInstance(QueueItemRepository::class);
     }
 
     /**
-     * @return int|mixed
+     * Getter for Index Queue UID
+     *
+     * @return integer
      */
     public function getIndexQueueUid()
     {
@@ -156,6 +195,16 @@ class Item
     public function getRootPageUid()
     {
         return $this->rootPageUid;
+    }
+
+    /**
+     * Returns mount point identifier
+     *
+     * @return string
+     */
+    public function getMountPointIdentifier()
+    {
+        return $this->mountPointIdentifier;
     }
 
     /**
@@ -175,6 +224,30 @@ class Item
     }
 
     /**
+     * @return boolean
+     */
+    public function getHasErrors()
+    {
+        return trim($this->errors) !== '';
+    }
+
+    /**
+     * @return int
+     */
+    public function getState()
+    {
+        if ($this->getHasErrors()) {
+            return self::STATE_BLOCKED;
+        }
+
+        if ($this->getIndexed() > $this->getChanged()) {
+            return self::STATE_INDEXED;
+        }
+
+        return self::STATE_PENDING;
+    }
+
+    /**
      * Gets the site the item belongs to.
      *
      * @return Site Site instance the item belongs to.
@@ -185,49 +258,77 @@ class Item
         return $siteRepository->getSiteByRootPageId($this->rootPageUid);
     }
 
+    /**
+     * Returns the type/tablename of the queue record.
+     *
+     * @return mixed|string
+     */
     public function getType()
     {
         return $this->type;
     }
 
+    /**
+     * @param $type
+     */
     public function setType($type)
     {
         $this->type = $type;
     }
 
+    /**
+     * Returns the name of the index configuration that was used to create this record.
+     *
+     * @return mixed|string
+     */
     public function getIndexingConfigurationName()
     {
         return $this->indexingConfigurationName;
     }
 
+    /**
+     * @param string $indexingConfigurationName
+     */
     public function setIndexingConfigurationName($indexingConfigurationName)
     {
         $this->indexingConfigurationName = $indexingConfigurationName;
     }
 
+    /**
+     * Returns the timestamp when this queue item was changed.
+     *
+     * @return int|mixed
+     */
     public function getChanged()
     {
         return $this->changed;
     }
 
+    /**
+     * Returns the timestamp when this queue item was indexed.
+     *
+     * @return int|mixed
+     */
+    public function getIndexed()
+    {
+        return $this->indexed;
+    }
+
+    /**
+     * Used to set the timestamp when the related item was changed.
+     *
+     * @param int $changed
+     */
     public function setChanged($changed)
     {
         $this->changed = intval($changed);
     }
 
     /**
-     * Sets the timestamp of when an item has been indexed.
+     * Returns the uid of related record (item_uid).
      *
-     * @return void
-     * @deprecated since 6.1 will be removed in 7.0
+     * @return mixed
      */
-    public function updateIndexedTime()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $queue = GeneralUtility::makeInstance(Queue::class);
-        $queue->updateIndexTimeByItem($this);
-    }
-
     public function getRecordUid()
     {
         $this->getRecord();
@@ -257,12 +358,19 @@ class Item
         return $this->record;
     }
 
+    /**
+     * Can be used to set the related record.
+     *
+     * @param array $record
+     */
     public function setRecord(array $record)
     {
         $this->record = $record;
     }
 
     /**
+     * Retrieves the page id where the related record is stored.
+     *
      * @return int
      */
     public function getRecordPageId()
@@ -278,36 +386,18 @@ class Item
      */
     public function storeIndexingProperties()
     {
-        $this->removeIndexingProperties();
+        $this->indexQueueIndexingPropertyRepository->removeByRootPidAndIndexQueueUid(intval($this->rootPageUid), intval($this->indexQueueUid));
 
         if ($this->hasIndexingProperties()) {
             $this->writeIndexingProperties();
         }
 
-        $this->updateHasIndexingPropertiesFlag();
+        $this->queueItemRepository->updateHasIndexingPropertiesFlagByItemUid($this->indexQueueUid, $this->hasIndexingProperties);
     }
 
     /**
-     * Removes existing indexing properties.
-     *
-     * @throws \RuntimeException when an SQL error occurs
+     * @return bool
      */
-    protected function removeIndexingProperties()
-    {
-        $GLOBALS['TYPO3_DB']->exec_DELETEquery(
-            'tx_solr_indexqueue_indexing_property',
-            'root = ' . intval($this->rootPageUid)
-            . ' AND item_id = ' . intval($this->indexQueueUid)
-        );
-
-        if ($GLOBALS['TYPO3_DB']->sql_error()) {
-            throw new \RuntimeException(
-                'Could not remove indexing properties for item ' . $this->indexQueueUid,
-                1323802532
-            );
-        }
-    }
-
     public function hasIndexingProperties()
     {
         return $this->hasIndexingProperties;
@@ -315,59 +405,22 @@ class Item
 
     /**
      * Writes all indexing properties.
-     *
-     * @throws \RuntimeException when an SQL error occurs
      */
     protected function writeIndexingProperties()
     {
         $properties = [];
         foreach ($this->indexingProperties as $propertyKey => $propertyValue) {
             $properties[] = [
-                $this->rootPageUid,
-                $this->indexQueueUid,
-                $propertyKey,
-                $propertyValue
+                'root' => $this->rootPageUid,
+                'item_id' => $this->indexQueueUid,
+                'property_key' => $propertyKey,
+                'property_value' => $propertyValue
             ];
         }
-
-        $GLOBALS['TYPO3_DB']->exec_INSERTmultipleRows(
-            'tx_solr_indexqueue_indexing_property',
-            ['root', 'item_id', 'property_key', 'property_value'],
-            $properties
-        );
-
-        if ($GLOBALS['TYPO3_DB']->sql_error()) {
-            throw new \RuntimeException(
-                'Could not insert indexing properties for item ' . $this->indexQueueUid,
-                1323802570
-            );
+        if (empty($properties)) {
+            return;
         }
-    }
-
-    /**
-     * Updates the "has_indexing_properties" flag in the Index Queue.
-     *
-     * @throws \RuntimeException when an SQL error occurs
-     */
-    protected function updateHasIndexingPropertiesFlag()
-    {
-        $hasIndexingProperties = '0';
-        if ($this->hasIndexingProperties()) {
-            $hasIndexingProperties = '1';
-        }
-
-        $GLOBALS['TYPO3_DB']->exec_UPDATEquery(
-            'tx_solr_indexqueue_item',
-            'uid = ' . intval($this->indexQueueUid),
-            ['has_indexing_properties' => $hasIndexingProperties]
-        );
-
-        if ($GLOBALS['TYPO3_DB']->sql_error()) {
-            throw new \RuntimeException(
-                'Could not update has_indexing_properties flag in Index Queue for item ' . $this->indexQueueUid,
-                1323802610
-            );
-        }
+        $this->indexQueueIndexingPropertyRepository->bulkInsert($properties);
     }
 
     /**
@@ -383,24 +436,21 @@ class Item
 
     /**
      * Loads the indexing properties for the item - if not already loaded.
-     *
      */
     public function loadIndexingProperties()
     {
-        if (!$this->indexingPropertiesLoaded) {
-            $indexingProperties = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-                'property_key, property_value',
-                'tx_solr_indexqueue_indexing_property',
-                'item_id = ' . intval($this->indexQueueUid)
-            );
+        if ($this->indexingPropertiesLoaded) {
+            return;
+        }
 
-            if (!empty($indexingProperties)) {
-                foreach ($indexingProperties as $indexingProperty) {
-                    $this->indexingProperties[$indexingProperty['property_key']] = $indexingProperty['property_value'];
-                }
-            }
+        $indexingProperties = $this->indexQueueIndexingPropertyRepository->findAllByIndexQueueUid(intval($this->indexQueueUid));
+        $this->indexingPropertiesLoaded = true;
+        if (empty($indexingProperties)) {
+            return;
+        }
 
-            $this->indexingPropertiesLoaded = true;
+        foreach ($indexingProperties as $indexingProperty) {
+            $this->indexingProperties[$indexingProperty['property_key']] = $indexingProperty['property_value'];
         }
     }
 
@@ -413,7 +463,6 @@ class Item
      */
     public function setIndexingProperty($key, $value)
     {
-
         // make sure to not interfere with existing indexing properties
         $this->loadIndexingProperties();
 

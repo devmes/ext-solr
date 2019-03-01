@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Backend;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,7 +24,7 @@ namespace ApacheSolrForTypo3\Solr\Backend;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use TYPO3\CMS\Backend\Form\FormResultCompiler;
 use TYPO3\CMS\Backend\Form\NodeFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -124,13 +124,11 @@ class IndexingConfigurationSelectorField
         $formField = $this->renderSelectCheckbox($this->buildSelectorItems($tablesToIndex), $selectedValues);
 
         // need to wrap the field in a TCEforms table to make the CSS apply
-        $form = '
-		<div class="typo3-TCEforms tx_solr-TCEforms">
-            ' . "\n" . $formField . "\n" . '
-		</div>
-		';
+        $form[] = '<div class="typo3-TCEforms tx_solr-TCEforms">';
+        $form[] = $formField;
+        $form[] = '</div>';
 
-        return $form;
+        return implode(LF, $form);
     }
 
     /**
@@ -142,8 +140,8 @@ class IndexingConfigurationSelectorField
     {
         $indexingTableMap = [];
 
-        $solrConfiguration      = $this->site->getSolrConfiguration();
-        $configurationNames     = $solrConfiguration->getEnabledIndexQueueConfigurationNames();
+        $solrConfiguration = $this->site->getSolrConfiguration();
+        $configurationNames = $solrConfiguration->getEnabledIndexQueueConfigurationNames();
         foreach ($configurationNames as $configurationName) {
             $indexingTableMap[$configurationName] = $solrConfiguration->getIndexQueueTableNameOrFallbackToConfigurationName($configurationName);
         }
@@ -155,6 +153,7 @@ class IndexingConfigurationSelectorField
      * Builds the items to render in the TCEforms select field.
      *
      * @param array $tablesToIndex A map of indexing configuration to database tables
+     *
      * @return array Selectable items for the TCEforms select field
      */
     protected function buildSelectorItems(array $tablesToIndex)
@@ -163,7 +162,7 @@ class IndexingConfigurationSelectorField
 
         foreach ($tablesToIndex as $configurationName => $tableName) {
             $icon = 'tcarecords-' . $tableName . '-default';
-            if ($tableName == 'pages') {
+            if ($tableName === 'pages') {
                 $icon = 'apps-pagetree-page-default';
             }
 
@@ -181,6 +180,7 @@ class IndexingConfigurationSelectorField
     /**
      * @param array $items
      * @param string $selectedValues
+     *
      * @return string
      * @throws \TYPO3\CMS\Backend\Form\Exception
      */
@@ -194,9 +194,11 @@ class IndexingConfigurationSelectorField
             'fieldTSConfig' => ['noMatchingValue_label' => '']
         ];
 
-        /** @var \TYPO3\CMS\Backend\Form\NodeFactory $nodeFactory */
         $nodeFactory = GeneralUtility::makeInstance(NodeFactory::class);
-        $options = ['renderType' => 'selectCheckBox', 'table' => 'tx_solr_classes_backend_indexingconfigurationselector', 'fieldName' => 'additionalFields', 'databaseRow' => [], 'parameterArray' => $parameterArray];
+        $options = [
+            'renderType' => 'selectCheckBox', 'table' => 'tx_solr_classes_backend_indexingconfigurationselector',
+            'fieldName' => 'additionalFields', 'databaseRow' => [], 'parameterArray' => $parameterArray
+        ];
         $options['parameterArray']['fieldConf']['config']['items'] = $items;
         $options['parameterArray']['fieldTSConfig']['noMatchingValue_label'] = '';
 
@@ -205,7 +207,7 @@ class IndexingConfigurationSelectorField
         $formResultCompiler->mergeResult($selectCheckboxResult);
 
         $formHtml = isset($selectCheckboxResult['html']) ? $selectCheckboxResult['html'] : '';
-        $content = $formResultCompiler->JStop() . $formHtml . $formResultCompiler->printNeededJSFunctions();
+        $content = $formResultCompiler->addCssFiles() . $formHtml . $formResultCompiler->printNeededJSFunctions();
 
         return $content;
     }

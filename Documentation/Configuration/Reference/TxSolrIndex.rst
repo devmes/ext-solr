@@ -38,8 +38,6 @@ A mapping of Solr field names to additional string values to be indexed with pag
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.index.additionalFields {
@@ -52,8 +50,6 @@ Example:
         // more processing here as needed
       }
     }
-
-|
 
 Since version 1.1 you can use cObjects to generate the value for the field. The only thing to observe is that you generate strings. Other values may work, but haven't been tested yet.
 
@@ -73,8 +69,6 @@ Before documents are sent to the Solr server they are processed by the field pro
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     fieldProcessingInstructions {
@@ -82,8 +76,6 @@ Example:
         created = timestampToIsoDate
         endtime = timestampToIsoDate
     }
-
-|
 
 queue
 -----
@@ -100,8 +92,6 @@ The Index Queue comes preconfigured to index pages (enabled by default) and an e
 Defines a set of table indexing configurations. By convention the name of the indexing configuration also represents the table name. You can name the indexing configuration differently though by explicitly defining the table as a parameter within the indexing configuration. That's useful when indexing records from one table with different configuration - different single view pages / URLs for example.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -146,8 +136,6 @@ Example:
         sortTitle_stringS  = title
     }
 
-|
-
 queue.[indexConfig]
 -------------------
 
@@ -172,14 +160,10 @@ queue.[indexConfig].additionalWhereClause
 
 A WHERE clause that is used when initializing the Index Queue, limiting what goes into the Queue. Use this to limit records by page ID or the like.
 
-|
-
 .. code-block:: typoscript
 
     // only index standard and mount pages, enabled for search
     plugin.tx_solr.index.queue.pages.additionalWhereClause = doktype IN(1, 7)
-
-|
 
 queue.[indexConfig].initialPagesAdditionalWhereClause
 -----------------------------------------------------
@@ -192,15 +176,11 @@ A WHERE clause that is used when initializing the Index Queue, limiting pages th
 This filter is applied **prior** to the plugin.tx_solr.index.queue.[indexConfig].additionalWhereClause
 filter and hence provides an even stronger filter mechanism - since it can be used to filter away page
 ID's that shouldn't be processed at all.
-|
 
 .. code-block:: typoscript
 
     // Filter away pages that are "spacer" and have no_search, hidden and nav_hide set to zero
     plugin.tx_solr.index.queue.pages.initialPagesAdditionalWhereClause = doktype <> 199 AND no_search = 0 AND hidden = 0 AND nav_hide = 0
-
-|
-
 
 queue.[indexConfig].additionalPageIds
 -------------------------------------
@@ -222,8 +202,6 @@ queue.[indexConfig].table
 :Since: 2.0
 
 Sometimes you may want to index records from a table with different configurations, f.e., to generate different single view URLs for tt_news records depending on their category or storage page ID. In these cases you can use a distinct name for the configuration and define the table explicitly.
-
-|
 
 .. code-block:: typoscript
 
@@ -273,8 +251,6 @@ The indexer class is loaded using TYPO3's auto loading mechanism, so make sure y
 
 Example, pages use a specialized indexer:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.index.queue.pages {
@@ -290,8 +266,6 @@ Example, the TypoScript settings are available in PHP:
 
 TypoScript:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.index.queue.myIndexingConfiguration {
@@ -304,8 +278,6 @@ TypoScript:
 
 
 PHP:
-
-|
 
 .. code-block:: php
 
@@ -320,8 +292,6 @@ PHP:
         }
       }
     }
-
-|
 
 queue.[indexConfig].indexingPriority
 ------------------------------------
@@ -344,8 +314,6 @@ queue.[indexConfig].fields
 Mapping of Solr field names on the left side to database table field names or content objects on the right side. You must at least provide the title, content, and url fields. TYPO3 system fields like uid, pid, crdate, tstamp and so on are added automatically by the indexer depending on the TCA information of a table.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -371,8 +339,6 @@ queue.[indexConfig].attachments.fields
 Comma-separated list of fields that hold files. Using this setting allows to tell the file indexer in which fields to look for files to index from records.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -407,8 +373,6 @@ queue.pages.excludeContentByClass
 Can be used for page indexing to exclude a certain css class to be indexed.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -497,8 +461,6 @@ The helper supports stdWrap on its configuration root.
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     content = SOLR_CONTENT
@@ -531,8 +493,6 @@ Turns comma separated strings into an array to be used in a multi value field of
 The helper supports stdWrap on its configuration root.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -593,8 +553,6 @@ SOLR_RELATION
 Resolves relations between tables.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -691,8 +649,6 @@ Where clause that could be used to limit the related items to a subset that matc
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     category_stringM = SOLR_RELATION
@@ -701,6 +657,71 @@ Example:
         multiValue = 1
         additionalWhereClause = pid=2
     }
+
+SOLR_CLASSIFICATION
+~~~~~~~~~~~~~~~~~~~
+
+:Since: 8.0
+
+Allows to classify documents based on a configured pattern
+
+Example:
+
+.. code-block:: typoscript
+
+    topic_stringM = SOLR_CLASSIFICATION
+    topic_stringM {
+        field = __solr_content
+        classes {
+            programming {
+                matchPatterns = php, java, javascript, go
+                class = programming
+            }
+            cms {
+                matchPatterns = TYPO3, joomla
+                class = cms
+            }
+            database {
+                matchPatterns = mysql, MariaDB, postgreSQL
+                class = database
+            }
+        }
+    }
+
+
+The ```matchPatterns`` can be used to configure pattern that can occure in the content to add that class. In addition ```unmatchPatterns```can be configured to define patterns that should not occure in the content.
+
+Patterns are regular expressions. You configure everything that is possible with regular expressions.
+
+Example:s
+
+The pattern ```\ssmart[a-z]*\s``` will match everything, that starts with a **space** followed by **smart** ending with any lowercase letter and ending by **space**. This would match e.g. smartphone, smarthome and every other word that starts with ```smart```.
+
+**Note**:
+
+* The configuration ```patterns``` is deprecated with 10.0.0 and will be removed in EXT:solr 11. Please use ```matchPatterns``` and ```unmatchPatterns`` now.
+
+
+**field**
+
+:Type: String
+:TS Path: plugin.tx_solr.index.queue.[indexConfig].fields.[fieldName].field
+:Since: 8.0
+
+Name of the database field, that should be used to as content to classify. The special field __solr_content can
+be used during indexing to classify the content of the page or file or any other record that fills the content field before.
+
+**classes**
+
+:Type: Array
+:TS Path: plugin.tx_solr.index.queue.[indexConfig].fields.[fieldName].field
+:Since: 8.0
+
+Array of classification configurations. Each configuration needs to have the property "patterns", that is a list of patters that need to match and "class", that is the mapped class that will be indexed then.
+
+**Note**:
+
+The output field needs to be a multivalue field since an indexed item can have multiple classes.
 
 enableCommits
 -------------

@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\System\Solr\Parser;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -71,7 +71,6 @@ class SchemaParser
     protected function parseLanguage(\stdClass $schema)
     {
         $language = 'english';
-
         if (!is_object($schema) || !isset($schema->fieldTypes)) {
             return $language;
         }
@@ -82,7 +81,7 @@ class SchemaParser
             }
             // we have a text field
             foreach ($fieldType->queryAnalyzer->filters as $filter) {
-                if ($filter->class === 'solr.ManagedSynonymFilterFactory') {
+                if ($filter->class === 'solr.ManagedSynonymGraphFilterFactory') {
                     $language = $filter->managed;
                 }
             }

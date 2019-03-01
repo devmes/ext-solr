@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\System\Util;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -91,7 +91,7 @@ class ArrayAccessor
 
     /**
      * @param $path
-     * @param null $defaultIfEmpty
+     * @param mixed $defaultIfEmpty
      * @return array|null
      */
     public function get($path, $defaultIfEmpty = null)
@@ -208,10 +208,10 @@ class ArrayAccessor
             // direct access for small paths
             case 1:
                 unset($this->data[$pathArray[0]]);
-                return;
+                 return;
             case 2:
                 unset($this->data[$pathArray[0]][$pathArray[1]]);
-                return;
+                 return;
             default:
                 $this->resetDeepElementWithLoop($pathArray);
         }
@@ -246,12 +246,12 @@ class ArrayAccessor
     protected function getPathAsArray($path)
     {
         if (!$this->includePathSeparatorInKeys) {
-            $pathArray =  explode($this->pathSeparator, $path);
+            $pathArray = explode($this->pathSeparator, $path);
             return $pathArray;
         }
 
         $substitutedPath = str_replace($this->pathSeparator, $this->pathSeparator . '@@@', trim($path));
-        $pathArray =  array_filter(explode('@@@', $substitutedPath));
+        $pathArray = array_filter(explode('@@@', $substitutedPath));
         return $pathArray;
     }
 }

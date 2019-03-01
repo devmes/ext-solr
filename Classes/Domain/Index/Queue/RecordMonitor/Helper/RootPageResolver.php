@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index\Queue\RecordMonitor\Helper;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,7 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index\Queue\RecordMonitor\Helper;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use ApacheSolrForTypo3\Solr\System\Cache\TwoLevelCache;
 use ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration;
 use ApacheSolrForTypo3\Solr\System\Page\Rootline;
@@ -68,8 +68,8 @@ class RootPageResolver implements SingletonInterface
      */
     public function __construct(ConfigurationAwareRecordService $recordService = null, TwoLevelCache $twoLevelCache = null)
     {
-        $this->recordService = isset($recordService) ? $recordService : GeneralUtility::makeInstance(ConfigurationAwareRecordService::class);
-        $this->runtimeCache = isset($twoLevelCache) ? $twoLevelCache : GeneralUtility::makeInstance(TwoLevelCache::class, 'cache_runtime');
+        $this->recordService = $recordService ?? GeneralUtility::makeInstance(ConfigurationAwareRecordService::class);
+        $this->runtimeCache = $twoLevelCache ?? GeneralUtility::makeInstance(TwoLevelCache::class, /** @scrutinizer ignore-type */ 'cache_runtime');
         $this->extensionConfiguration = GeneralUtility::makeInstance(ExtensionConfiguration::class);
     }
 
@@ -109,14 +109,19 @@ class RootPageResolver implements SingletonInterface
             return false;
         }
 
+        // Page -1 is a workspace thing
+        if ($pageId === -1) {
+            return false;
+        }
+
         $cacheId = 'RootPageResolver' . '_' . 'getIsRootPageId' . '_' . $pageId;
         $isSiteRoot = $this->runtimeCache->get($cacheId);
+
         if (!empty($isSiteRoot)) {
             return $isSiteRoot;
         }
 
-        $page = (array)BackendUtility::getRecord('pages', $pageId, 'is_siteroot');
-
+        $page = $this->getPageRecordByPageId($pageId);
         if (empty($page)) {
             throw new \InvalidArgumentException(
                 'The page for the given page ID \'' . $pageId
@@ -132,13 +137,24 @@ class RootPageResolver implements SingletonInterface
     }
 
     /**
+     * @param $pageId
+     * @param string $fieldList
+     * @return array
+     */
+    protected function getPageRecordByPageId($pageId, $fieldList = 'is_siteroot')
+    {
+        return (array)BackendUtility::getRecord('pages', $pageId, $fieldList);
+    }
+
+    /**
      * Determines the rootpage ID for a given page.
      *
      * @param int $pageId A page ID somewhere in a tree.
      * @param bool $forceFallback Force the explicit detection and do not use the current frontend root line
+     * @param string $mountPointIdentifier
      * @return int The page's tree branch's root page ID
      */
-    public function getRootPageId($pageId = 0, $forceFallback = false)
+    public function getRootPageId($pageId = 0, $forceFallback = false, $mountPointIdentifier = '')
     {
         /** @var Rootline $rootLine */
         $rootLine = GeneralUtility::makeInstance(Rootline::class);
@@ -151,8 +167,14 @@ class RootPageResolver implements SingletonInterface
 
         // fallback, backend
         if ($pageId != 0 && ($forceFallback || !$rootLine->getHasRootPage())) {
+            /* @var $pageSelect PageRepository */
             $pageSelect = GeneralUtility::makeInstance(PageRepository::class);
-            $rootLineArray = $pageSelect->getRootLine($pageId, '', true);
+
+            try {
+                $rootLineArray = $pageSelect->getRootLine($pageId, $mountPointIdentifier);
+            } catch (\RuntimeException $e) {
+                $rootLineArray = [];
+            }
             $rootLine->setRootLineArray($rootLineArray);
         }
 
@@ -178,7 +200,11 @@ class RootPageResolver implements SingletonInterface
             $rootPages[] = $rootPageId;
         }
         if ($this->extensionConfiguration->getIsUseConfigurationTrackRecordsOutsideSiteroot()) {
-            $alternativeSiteRoots = $this->getAlternativeSiteRootPagesIds($table, $uid, $rootPageId);
+            $recordPageId = $this->getRecordPageId($table, $uid);
+            if ($recordPageId === 0) {
+                return $rootPages;
+            }
+            $alternativeSiteRoots = $this->getAlternativeSiteRootPagesIds($table, $uid, $recordPageId);
             $rootPages = array_merge($rootPages, $alternativeSiteRoots);
         }
 
@@ -199,10 +225,23 @@ class RootPageResolver implements SingletonInterface
             $rootPageId = $this->getRootPageId($uid);
             return $rootPageId;
         } else {
-            $record = BackendUtility::getRecord($table, $uid, 'pid');
-            $rootPageId = $this->getRootPageId($record['pid'], true);
+            $recordPageId = $this->getRecordPageId($table, $uid);
+            $rootPageId = $this->getRootPageId($recordPageId, true);
             return $rootPageId;
         }
+    }
+
+    /**
+     * Returns the pageId of the record or 0 when no valid record was given.
+     *
+     * @param string $table
+     * @param integer $uid
+     * @return mixed
+     */
+    protected function getRecordPageId($table, $uid)
+    {
+        $record = BackendUtility::getRecord($table, $uid, 'pid');
+        return !empty($record['pid']) ? (int)$record['pid'] : 0;
     }
 
     /**

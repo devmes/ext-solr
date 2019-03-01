@@ -1,5 +1,4 @@
 <?php
-
 namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Index;
 
 /***************************************************************
@@ -11,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Index;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,6 +23,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Domain\Index;
  *
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
+
 use ApacheSolrForTypo3\Solr\Domain\Index\IndexService;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
@@ -97,11 +97,13 @@ class IndexServiceTest extends IntegrationTest
             ]
         ];
     }
+
     /**
-     *
      * @dataProvider canResolveAbsRefPrefixDataProvider
      * @param string $absRefPrefix
      * @param string $expectedUrl
+     * @throws \ApacheSolrForTypo3\Solr\System\Environment\WebRootAllReadyDefinedException
+     * @throws \TYPO3\CMS\Core\Tests\Exception
      * @test
      */
     public function canResolveAbsRefPrefix($absRefPrefix, $expectedUrl)
@@ -109,7 +111,7 @@ class IndexServiceTest extends IntegrationTest
         $this->cleanUpSolrServerAndAssertEmpty();
 
         // create fake extension database table and TCA
-        $this->importDumpFromFixture('fake_extension2_table.sql');
+        $this->importExtTablesDefinition('fake_extension2_table.sql');
         $GLOBALS['TCA']['tx_fakeextension_domain_model_bar'] = include($this->getFixturePathByName('fake_extension2_bar_tca.php'));
         $GLOBALS['TCA']['tx_fakeextension_domain_model_directrelated'] = include($this->getFixturePathByName('fake_extension2_directrelated_tca.php'));
 

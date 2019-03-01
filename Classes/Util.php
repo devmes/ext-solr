@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,21 +24,20 @@ namespace ApacheSolrForTypo3\Solr;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Domain\Index\Queue\RecordMonitor\Helper\RootPageResolver;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
-use ApacheSolrForTypo3\Solr\Domain\Site\SiteHashService;
 use ApacheSolrForTypo3\Solr\System\Cache\TwoLevelCache;
 use ApacheSolrForTypo3\Solr\System\Configuration\ConfigurationManager;
 use ApacheSolrForTypo3\Solr\System\Configuration\ConfigurationPageResolver;
 use ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
-use ApacheSolrForTypo3\Solr\System\DateTime\FormatService;
+use ApacheSolrForTypo3\Solr\System\TCA\TCAService;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
+use ApacheSolrForTypo3\Solr\System\Mvc\Frontend\Controller\OverriddenTypoScriptFrontendController;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\TimeTracker\NullTimeTracker;
+use TYPO3\CMS\Core\TimeTracker\TimeTracker;
 use TYPO3\CMS\Core\TypoScript\ExtendedTemplateService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
-use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
@@ -59,25 +58,15 @@ class Util
      * @param string $mountPointParameter The mount point parameter that is used to access the page.
      * @return string The document id for that page
      */
-    public static function getPageDocumentId(
-        $uid,
-        $typeNum = 0,
-        $language = 0,
-        $accessGroups = '0,-1',
-        $mountPointParameter = ''
-    ) {
+    public static function getPageDocumentId($uid, $typeNum = 0, $language = 0, $accessGroups = '0,-1', $mountPointParameter = '')
+    {
         $additionalParameters = $typeNum . '/' . $language . '/' . $accessGroups;
 
         if ((string)$mountPointParameter !== '') {
             $additionalParameters = $mountPointParameter . '/' . $additionalParameters;
         }
 
-        $documentId = self::getDocumentId(
-            'pages',
-            $uid,
-            $uid,
-            $additionalParameters
-        );
+        $documentId = self::getDocumentId('pages', $uid, $uid, $additionalParameters);
 
         return $documentId;
     }
@@ -86,19 +75,15 @@ class Util
      * Generates a document id in the form $siteHash/$type/$uid.
      *
      * @param string $table The records table name
-     * @param int $pid The record's pid
+     * @param int $rootPageId The record's site root id
      * @param int $uid The record's uid
      * @param string $additionalIdParameters Additional ID parameters
      * @return string A document id
      */
-    public static function getDocumentId(
-        $table,
-        $pid,
-        $uid,
-        $additionalIdParameters = ''
-    ) {
+    public static function getDocumentId($table, $rootPageId, $uid, $additionalIdParameters = '')
+    {
         $siteRepository = GeneralUtility::makeInstance(SiteRepository::class);
-        $site = $siteRepository->getSiteByPageId($pid);
+        $site = $siteRepository->getSiteByPageId($rootPageId);
         $siteHash = $site->getSiteHash();
 
         $documentId = $siteHash . '/' . $table . '/' . $uid;
@@ -110,107 +95,6 @@ class Util
     }
 
     /**
-     * Converts a date from unix timestamp to ISO 8601 format.
-     *
-     * @param int $timestamp unix timestamp
-     * @return string the date in ISO 8601 format
-     * @deprecated since 6.1 will be removed in 7.0
-     */
-    public static function timestampToIso($timestamp)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $formatService = GeneralUtility::makeInstance(FormatService::class);
-
-        return $formatService->timestampToIso($timestamp);
-    }
-
-    /**
-     * Converts a date from ISO 8601 format to unix timestamp.
-     *
-     * @param string $isoTime date in ISO 8601 format
-     * @return int unix timestamp
-     * @deprecated since 6.1 will be removed in 7.0
-     */
-    public static function isoToTimestamp($isoTime)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $formatService = GeneralUtility::makeInstance(FormatService::class);
-
-        return $formatService->isoToTimestamp($isoTime);
-    }
-
-    /**
-     * Converts a date from unix timestamp to ISO 8601 format in UTC timezone.
-     *
-     * @param int $timestamp unix timestamp
-     * @return string the date in ISO 8601 format
-     * @deprecated since 6.1 will be removed in 7.0
-     */
-    public static function timestampToUtcIso($timestamp)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $formatService = GeneralUtility::makeInstance(FormatService::class);
-
-        return $formatService->timestampToUtcIso($timestamp);
-    }
-
-    /**
-     * Converts a date from ISO 8601 format in UTC timezone to unix timestamp.
-     *
-     * @param string $isoTime date in ISO 8601 format
-     * @return int unix timestamp
-     * @deprecated since 6.1 will be removed in 7.0
-     */
-    public static function utcIsoToTimestamp($isoTime)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $formatService = GeneralUtility::makeInstance(FormatService::class);
-
-        return $formatService->utcIsoToTimestamp($isoTime);
-    }
-
-    /**
-     * Returns given word as CamelCased.
-     *
-     * Converts a word like "send_email" to "SendEmail". It
-     * will remove non alphanumeric characters from the word, so
-     * "who's online" will be converted to "WhoSOnline"
-     *
-     * @param string $word Word to convert to camel case
-     * @return string UpperCamelCasedWord
-     */
-    public static function camelize($word)
-    {
-        return str_replace(' ', '',
-            ucwords(preg_replace('![^A-Z^a-z^0-9]+!', ' ', $word)));
-    }
-
-    /**
-     * Returns a given CamelCasedString as an lowercase string with underscores.
-     * Example: Converts BlogExample to blog_example, and minimalValue to minimal_value
-     *
-     * @param string $string String to be converted to lowercase underscore
-     * @return string     lowercase_and_underscored_string
-     */
-    public static function camelCaseToLowerCaseUnderscored($string)
-    {
-        return strtolower(preg_replace('/(?<=\w)([A-Z])/', '_\\1', $string));
-    }
-
-    /**
-     * Returns a given string with underscores as UpperCamelCase.
-     * Example: Converts blog_example to BlogExample
-     *
-     * @param string $string String to be converted to camel case
-     * @return string     UpperCamelCasedWord
-     */
-    public static function underscoredToUpperCamelCase($string)
-    {
-        return str_replace(' ', '',
-            ucwords(str_replace('_', ' ', strtolower($string))));
-    }
-
-    /**
      * Shortcut to retrieve the TypoScript configuration for EXT:solr
      * (plugin.tx_solr) from TSFE.
      *
@@ -218,19 +102,8 @@ class Util
      */
     public static function getSolrConfiguration()
     {
-        $configurationManager = self::getConfigurationManager();
-
-        return $configurationManager->getTypoScriptConfiguration();
-    }
-
-    /**
-     * @return ConfigurationManager
-     */
-    private static function getConfigurationManager()
-    {
-        /** @var ConfigurationManager $configurationManager */
         $configurationManager = GeneralUtility::makeInstance(ConfigurationManager::class);
-        return $configurationManager;
+        return $configurationManager->getTypoScriptConfiguration();
     }
 
     /**
@@ -242,11 +115,8 @@ class Util
      * @param int $language System language uid, optional, defaults to 0
      * @return TypoScriptConfiguration The Solr configuration for the requested tree.
      */
-    public static function getSolrConfigurationFromPageId(
-        $pageId,
-        $initializeTsfe = false,
-        $language = 0
-    ) {
+    public static function getSolrConfigurationFromPageId($pageId, $initializeTsfe = false, $language = 0)
+    {
         $rootPath = '';
         return self::getConfigurationFromPageId($pageId, $rootPath, $initializeTsfe, $language);
     }
@@ -263,17 +133,12 @@ class Util
      * @param bool $useTwoLevelCache Flag to enable the two level cache for the typoscript configuration array
      * @return TypoScriptConfiguration The Solr configuration for the requested tree.
      */
-    public static function getConfigurationFromPageId(
-        $pageId,
-        $path,
-        $initializeTsfe = false,
-        $language = 0,
-        $useTwoLevelCache = true
-    ) {
+    public static function getConfigurationFromPageId($pageId, $path, $initializeTsfe = false, $language = 0, $useTwoLevelCache = true)
+    {
         $pageId = self::getConfigurationPageIdToUse($pageId);
 
         static $configurationObjectCache = [];
-        $cacheId = md5($pageId . '|' . $path . '|' . $language);
+        $cacheId = md5($pageId . '|' . $path . '|' . $language . '|' . ($initializeTsfe ? '1' : '0'));
         if (isset($configurationObjectCache[$cacheId])) {
             return $configurationObjectCache[$cacheId];
         }
@@ -287,7 +152,7 @@ class Util
 
         if ($useTwoLevelCache) {
             /** @var $cache TwoLevelCache */
-            $cache = GeneralUtility::makeInstance(TwoLevelCache::class, 'tx_solr_configuration');
+            $cache = GeneralUtility::makeInstance(TwoLevelCache::class, /** @scrutinizer ignore-type */ 'tx_solr_configuration');
             $configurationArray = $cache->get($cacheId);
         }
 
@@ -357,7 +222,7 @@ class Util
      */
     protected static function buildTypoScriptConfigurationFromArray(array $configurationToUse, $pageId, $languageId, $typoScriptPath)
     {
-        $configurationManager = self::getConfigurationManager();
+        $configurationManager = GeneralUtility::makeInstance(ConfigurationManager::class);
         return $configurationManager->getTypoScriptConfiguration($configurationToUse, $pageId, $languageId, $typoScriptPath);
     }
 
@@ -379,6 +244,7 @@ class Util
 
     /**
      * This function is used to retrieve the configuration from an existing TSFE instance
+     *
      * @param $pageId
      * @param $path
      * @param $language
@@ -435,13 +301,11 @@ class Util
      * @param int $pageId The page id to initialize the TSFE for
      * @param int $language System language uid, optional, defaults to 0
      * @param bool $useCache Use cache to reuse TSFE
+     * @todo When we drop TYPO3 8 support we should use a middleware stack to initialize a TSFE for our needs
      * @return void
      */
-    public static function initializeTsfe(
-        $pageId,
-        $language = 0,
-        $useCache = true
-    ) {
+    public static function initializeTsfe($pageId, $language = 0, $useCache = true)
+    {
         static $tsfeCache = [];
 
         // resetting, a TSFE instance with data from a different page Id could be set already
@@ -450,14 +314,14 @@ class Util
         $cacheId = $pageId . '|' . $language;
 
         if (!is_object($GLOBALS['TT'])) {
-            $GLOBALS['TT'] = GeneralUtility::makeInstance(NullTimeTracker::class);
+            $GLOBALS['TT'] = GeneralUtility::makeInstance(TimeTracker::class, false);
         }
 
         if (!isset($tsfeCache[$cacheId]) || !$useCache) {
             GeneralUtility::_GETset($language, 'L');
 
-            $GLOBALS['TSFE'] = GeneralUtility::makeInstance(TypoScriptFrontendController::class,
-                $GLOBALS['TYPO3_CONF_VARS'], $pageId, 0);
+
+            $GLOBALS['TSFE'] = GeneralUtility::makeInstance(OverriddenTypoScriptFrontendController::class, $GLOBALS['TYPO3_CONF_VARS'], $pageId, 0);
 
             // for certain situations we need to trick TSFE into granting us
             // access to the page in any case to make getPageAndRootline() work
@@ -467,7 +331,7 @@ class Util
             $GLOBALS['TSFE']->gr_list = $pageRecord['fe_group'];
 
             $GLOBALS['TSFE']->sys_page = GeneralUtility::makeInstance(PageRepository::class);
-            $GLOBALS['TSFE']->getPageAndRootline();
+            self::getPageAndRootlineOfTSFE($pageId);
 
             // restore gr_list
             $GLOBALS['TSFE']->gr_list = $groupListBackup;
@@ -482,7 +346,6 @@ class Util
             $GLOBALS['TSFE']->tmpl->start($GLOBALS['TSFE']->rootLine);
             $GLOBALS['TSFE']->no_cache = false;
             $GLOBALS['TSFE']->getConfigArray();
-
             $GLOBALS['TSFE']->settingLanguage();
             if (!$useCache) {
                 $GLOBALS['TSFE']->settingLocale();
@@ -504,70 +367,17 @@ class Util
     }
 
     /**
-     * Determines the rootpage ID for a given page.
-     *
-     * @param int $pageId A page ID somewhere in a tree.
-     * @param bool $forceFallback Force the explicit detection and do not use the current frontend root line
-     * @return int The page's tree branch's root page ID
-     * @deprecated since 6.1 will be removed in 7.0
+     * @deprecated This is only implemented to provide compatibility for TYPO3 8 and 9 when we drop TYPO3 8 support this
+     * should changed to use a middleware stack
+     * @param integer $pageId
      */
-    public static function getRootPageId($pageId = 0, $forceFallback = false)
+    private static function getPageAndRootlineOfTSFE($pageId)
     {
-        GeneralUtility::logDeprecatedFunction();
-        $rootPageResolver = GeneralUtility::makeInstance(RootPageResolver::class);
-
-        return $rootPageResolver->getRootPageId($pageId, $forceFallback);
-    }
-
-    /**
-     * Takes a page Id and checks whether the page is marked as root page.
-     *
-     * @param int $pageId Page ID
-     * @return bool TRUE if the page is marked as root page, FALSE otherwise
-     * @deprecated since 6.1 will be removed in 7.0
-     */
-    public static function isRootPage($pageId)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $rootPageResolver = GeneralUtility::makeInstance(RootPageResolver::class);
-
-        return $rootPageResolver->getIsRootPageId($pageId);
-    }
-
-    /**
-     * Gets the site hash for a domain
-     *
-     * @deprecated since 6.1 will be removed in 7.0. use SiteHashService->getSiteHashForDomain now.
-     * @param string $domain Domain to calculate the site hash for.
-     * @return string site hash for $domain
-     */
-    public static function getSiteHashForDomain($domain)
-    {
-        GeneralUtility::logDeprecatedFunction();
-            /** @var $siteHashService SiteHashService */
-        $siteHashService = GeneralUtility::makeInstance(SiteHashService::class);
-        return $siteHashService->getSiteHashForDomain($domain);
-    }
-
-    /**
-     * Resolves magic keywords in allowed sites configuration.
-     * Supported keywords:
-     *   __solr_current_site - The domain of the site the query has been started from
-     *   __current_site - Same as __solr_current_site
-     *   __all - Adds all domains as allowed sites
-     *   * - Means all sites are allowed, same as no siteHash
-     *
-     * @deprecated since 6.1 will be removed in 7.0. use SiteHashService->getAllowedSitesForPageIdAndAllowedSitesConfiguration now.
-     * @param int $pageId A page ID that is then resolved to the site it belongs to
-     * @param string $allowedSitesConfiguration TypoScript setting for allowed sites
-     * @return string List of allowed sites/domains, magic keywords resolved
-     */
-    public static function resolveSiteHashAllowedSites($pageId, $allowedSitesConfiguration)
-    {
-        /** @var $siteHashService SiteHashService */
-        GeneralUtility::logDeprecatedFunction();
-        $siteHashService = GeneralUtility::makeInstance(SiteHashService::class);
-        return $siteHashService->getAllowedSitesForPageIdAndAllowedSitesConfiguration($pageId, $allowedSitesConfiguration);
+        //@todo When we drop the support of TYPO3 8 we should use the frontend middleware stack instead of initializing this on our own
+        /** @var $siteRepository SiteRepository */
+        $siteRepository = GeneralUtility::makeInstance(SiteRepository::class);
+        $site = $siteRepository->getSiteByPageId($pageId);
+        $GLOBALS['TSFE']->getPageAndRootlineWithDomain($site->getRootPageId());
     }
 
     /**
@@ -593,28 +403,6 @@ class Util
     }
 
     /**
-     * Checks whether a record is a localization overlay.
-     *
-     * @param string $tableName The record's table name
-     * @param array $record The record to check
-     * @return bool TRUE if the record is a language overlay, FALSE otherwise
-     */
-    public static function isLocalizedRecord($tableName, array $record)
-    {
-        $isLocalizedRecord = false;
-
-        if (isset($GLOBALS['TCA'][$tableName]['ctrl']['transOrigPointerField'])) {
-            $translationOriginalPointerField = $GLOBALS['TCA'][$tableName]['ctrl']['transOrigPointerField'];
-
-            if ($record[$translationOriginalPointerField] > 0) {
-                $isLocalizedRecord = true;
-            }
-        }
-
-        return $isLocalizedRecord;
-    }
-
-    /**
      * Check if the page type of a page record is allowed
      *
      * @param array $pageRecord The pages database row
@@ -625,7 +413,7 @@ class Util
     public static function isAllowedPageType(array $pageRecord, $configurationName = 'pages')
     {
         $isAllowedPageType = false;
-        $configurationName = is_null($configurationName) ? 'pages' : $configurationName;
+        $configurationName = $configurationName ?? 'pages';
         $allowedPageTypes = self::getAllowedPageTypes($pageRecord['uid'], $configurationName);
 
         if (in_array($pageRecord['doktype'], $allowedPageTypes)) {
@@ -651,23 +439,6 @@ class Util
     }
 
     /**
-     * Method to check if a page exists.
-     *
-     * @param int $pageId
-     * @return bool
-     */
-    public static function pageExists($pageId)
-    {
-        $page = BackendUtility::getRecord('pages', (int)$pageId, 'uid');
-
-        if (!is_array($page) || $page['uid'] != $pageId) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
      * Resolves the configured absRefPrefix to a valid value and resolved if absRefPrefix
      * is set to "auto".
      *
@@ -688,6 +459,7 @@ class Util
 
         return $absRefPrefix;
     }
+
 
     /**
      * This function can be used to check if one of the strings in needles is

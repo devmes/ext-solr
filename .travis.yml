@@ -4,71 +4,50 @@ services:
   - docker
 
 php:
-  - 5.5
-  - 5.6
-  - 7.0
-  - 7.1
+  - 7.2
 
 jdk:
   - oraclejdk8
-  - mysql-5.6
 
 addons:
   apt:
     packages:
       - parallel
-      - oracle-java8-installer
+
 env:
   global:
-    - JAVA_HOME=/usr/lib/jvm/java-8-oracle
     - TYPO3_DATABASE_NAME="typo3_ci"
     - TYPO3_DATABASE_HOST="127.0.0.1"
     - TYPO3_DATABASE_USERNAME="root"
     - TYPO3_DATABASE_PASSWORD=""
+    - PHP_CS_FIXER_VERSION="^2.11"
   matrix:
-    - TYPO3_VERSION="~7.6.16"
-    - TYPO3_VERSION="~8.7.0"
-    - TYPO3_VERSION="7.x-dev"
+    - TYPO3_VERSION="^9.5"
+    - TYPO3_VERSION="9.5.x-dev"
+    - TYPO3_VERSION="dev-master"
 
 matrix:
   fast_finish: true
-  exclude:
-    - php: 5.5
-      env: TYPO3_VERSION="~8.7.0"
-    - php: 5.6
-      env: TYPO3_VERSION="~8.7.0"
-    - php: 7.1
-      env: TYPO3_VERSION="7.x-dev"
-    - php: 7.1
-      env: TYPO3_VERSION="~7.6.16"
+  allow_failures:
+    - env: TYPO3_VERSION="dev-master"
+    - env: TYPO3_VERSION="9.5.x-dev"
 
 before_install:
   - composer self-update
   - composer --version
-  - composer global require friendsofphp/php-cs-fixer:v1.13.1
-  - composer global require namelesscoder/typo3-repository-client
-
-  # set root password
-  - mysql -u root -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('')"
-
-  # resources for solr
-  - sudo update-java-alternatives -s java-8-oracle
 
 install:
   - Build/Test/bootstrap.sh
-script:
-  # test extension
-  - Build/Test/cibuild.sh
 
-  # test docker file
+script:
+  - Build/Test/cibuild.sh
   - Build/Test/cibuild_docker.sh
 
 after_script:
-  - wget https://scrutinizer-ci.com/ocular.phar
-  - php ocular.phar code-coverage:upload --format=php-clover coverage.unit.clover
-  - php ocular.phar code-coverage:upload --format=php-clover coverage.integration.clover
+  - Build/Test/publish_coverage.sh
   - Build/Test/cleanup.sh
   - Build/Release/ter_tag_uploader.sh
+
 cache:
   directories:
     - $HOME/.composer/cache

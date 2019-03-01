@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\Domain\Search\ApacheSolrDocument;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,11 +26,15 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\Domain\Search\ApacheSolrDocument;
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
 use ApacheSolrForTypo3\Solr\Domain\Search\ApacheSolrDocument\Repository;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\Parser\DocumentEscapeService;
 use ApacheSolrForTypo3\Solr\NoSolrConnectionFoundException;
-use ApacheSolrForTypo3\Solr\Query;
 use ApacheSolrForTypo3\Solr\Search;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use ApacheSolrForTypo3\Solr\SolrService;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
+use ApacheSolrForTypo3\Solr\System\Solr\ResponseAdapter;
 use ApacheSolrForTypo3\Solr\Tests\Unit\UnitTest;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -60,7 +64,7 @@ class RepositoryTest extends UnitTest
      */
     public function findOneByPageIdAndByLanguageIdReturnsFirstFoundDocument()
     {
-        $apacheSolrDocumentCollection = [new \Apache_Solr_Document(), new \Apache_Solr_Document()];
+        $apacheSolrDocumentCollection = [new Document(), new Document()];
         $apacheSolrDocumentRepository = $this->getAccessibleMock(Repository::class, ['findByPageIdAndByLanguageId']);
         $apacheSolrDocumentRepository->expects($this->at(0))->method('findByPageIdAndByLanguageId')->will($this->returnValue($apacheSolrDocumentCollection));
 
@@ -111,26 +115,36 @@ class RepositoryTest extends UnitTest
      */
     public function findByPageIdAndByLanguageIdReturnsResultFromSearch()
     {
-
+        $documentEscapeServiceMock = $this->getDumbMock(DocumentEscapeService::class);
         $solrServiceMock = $this->getDumbMock(SolrService::class);
         $solrConnectionManager = $this->getAccessibleMock(ConnectionManager::class, ['getConnectionByPageId'], [], '', false);
         $solrConnectionManager->expects($this->any())->method('getConnectionByPageId')->will($this->returnValue($solrServiceMock));
         $mockedSingletons = [ConnectionManager::class => $solrConnectionManager];
 
-        $search = $this->getAccessibleMock(Search::class, ['search', 'getResultDocumentsEscaped'], [], '', false);
-        $mockedSingletons[Search::class] = $search;
+        $search = $this->getAccessibleMock(Search::class, ['search', 'getResultDocumentsEscaped'], [$documentEscapeServiceMock], '', false);
+
         GeneralUtility::resetSingletonInstances($mockedSingletons);
 
-        $expectedApacheSolrDocumentCollection = [new \Apache_Solr_Document(), new \Apache_Solr_Document()];
-        $search->expects($this->any())->method('search')->willReturn('Something what is not needed.');
-        $search->expects($this->any())->method('getResultDocumentsEscaped')->willReturn($expectedApacheSolrDocumentCollection);
+        $testDocuments = [new Document(), new Document()];
+
+        $parsedData = new \stdClass();
+        $parsedData->response = new \stdClass();
+        $parsedData->response->docs = $testDocuments;
+        $fakeResponse = $this->getDumbMock(ResponseAdapter::class);
+        $fakeResponse->expects($this->once())->method('getParsedData')->will($this->returnValue($parsedData));
+        $search->expects($this->any())->method('search')->willReturn($fakeResponse);
+        $documentEscapeServiceMock->expects($this->any())->method('applyHtmlSpecialCharsOnAllFields')->willReturn($expectedApacheSolrDocumentCollection);
+
+        $queryBuilderMock = $this->getDumbMock(QueryBuilder::class);
 
         /* @var $apacheSolrDocumentRepository Repository */
-        $apacheSolrDocumentRepository = $this->getAccessibleMock(Repository::class, ['getQueryForPage']);
-        $apacheSolrDocumentRepository->expects($this->any())->method('getQueryForPage')->willReturn(GeneralUtility::makeInstance(Query::class, ''));
+        $apacheSolrDocumentRepository = $this->getAccessibleMock(Repository::class, ['getQueryForPage', 'getSearch'],[null, null, $queryBuilderMock]);
+        $apacheSolrDocumentRepository->expects($this->once())->method('getSearch')->willReturn($search);
+        $queryMock = $this->getDumbMock(Query::class);
+        $queryBuilderMock->expects($this->any())->method('buildPageQuery')->willReturn($queryMock);
         $actualApacheSolrDocumentCollection = $apacheSolrDocumentRepository->findByPageIdAndByLanguageId(777, 0);
 
-        $this->assertSame($expectedApacheSolrDocumentCollection, $actualApacheSolrDocumentCollection);
+        $this->assertSame($testDocuments, $actualApacheSolrDocumentCollection);
     }
 
 }

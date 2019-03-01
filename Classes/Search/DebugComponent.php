@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,8 +24,11 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Query;
-use ApacheSolrForTypo3\Solr\Util;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequest;
+use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequestAware;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Debug search component
@@ -33,7 +36,7 @@ use ApacheSolrForTypo3\Solr\Util;
  *
  * @author Ingo Renner <ingo@typo3.org>
  */
-class DebugComponent extends AbstractComponent implements QueryAware
+class DebugComponent extends AbstractComponent implements QueryAware, SearchRequestAware
 {
 
     /**
@@ -44,6 +47,37 @@ class DebugComponent extends AbstractComponent implements QueryAware
     protected $query;
 
     /**
+     * @var SearchRequest
+     */
+    protected $seachRequest;
+
+    /**
+     * QueryBuilder
+     *
+     * @var QueryBuilder|object
+     */
+    protected $queryBuilder;
+
+    /**
+     * AccessComponent constructor.
+     * @param QueryBuilder|null
+     */
+    public function __construct(QueryBuilder $queryBuilder = null)
+    {
+        $this->queryBuilder = $queryBuilder ?? GeneralUtility::makeInstance(QueryBuilder::class);
+    }
+
+    /**
+     * Provides a component that is aware of the current SearchRequest
+     *
+     * @param SearchRequest $searchRequest
+     */
+    public function setSearchRequest(SearchRequest $searchRequest)
+    {
+        $this->seachRequest = $searchRequest;
+    }
+
+    /**
      * Initializes the search component.
      *
      * Sets the debug query parameter
@@ -51,10 +85,8 @@ class DebugComponent extends AbstractComponent implements QueryAware
      */
     public function initializeSearchComponent()
     {
-        $solrConfiguration = Util::getSolrConfiguration();
-
-        if ($solrConfiguration->getEnabledDebugMode()) {
-            $this->query->setDebugMode();
+        if ($this->seachRequest->getContextTypoScriptConfiguration()->getEnabledDebugMode()) {
+            $this->queryBuilder->startFrom($this->query)->useDebug(true);
         }
     }
 

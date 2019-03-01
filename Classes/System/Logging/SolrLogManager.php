@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\System\Logging;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -53,15 +53,32 @@ class SolrLogManager
     protected $debugWriter = null;
 
     /**
+     * @var string
+     */
+    protected $className = '';
+
+    /**
      * SolrLogManager constructor.
      *
-     * @param $className
+     * @param string $className
      * @param DebugWriter $debugWriter
      */
     public function __construct($className, DebugWriter $debugWriter = null)
     {
-        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger($className);
-        $this->debugWriter = isset($debugWriter) ? $debugWriter : GeneralUtility::makeInstance(DebugWriter::class);
+        $this->className = $className;
+        $this->debugWriter = $debugWriter ?? GeneralUtility::makeInstance(DebugWriter::class);
+    }
+
+    /**
+     * @return \TYPO3\CMS\Core\Log\Logger
+     */
+    protected function getLogger()
+    {
+        if ($this->logger === null) {
+            $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger($this->className);
+        }
+
+        return $this->logger;
     }
 
     /**
@@ -75,7 +92,7 @@ class SolrLogManager
      */
     public function log($level, $message, array $data = [])
     {
-        $this->logger->log($level, $message, $data);
+        $this->getLogger()->log($level, $message, $data);
         $this->debugWriter->write($level, $message, $data);
     }
 }

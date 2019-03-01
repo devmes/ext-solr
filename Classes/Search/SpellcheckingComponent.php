@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,7 +24,9 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Query;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Spellchecking search component
@@ -42,6 +44,22 @@ class SpellcheckingComponent extends AbstractComponent implements QueryAware
     protected $query;
 
     /**
+     * QueryBuilder
+     *
+     * @var QueryBuilder|object
+     */
+    protected $queryBuilder;
+
+    /**
+     * AccessComponent constructor.
+     * @param QueryBuilder|null
+     */
+    public function __construct(QueryBuilder $queryBuilder = null)
+    {
+        $this->queryBuilder = $queryBuilder ?? GeneralUtility::makeInstance(QueryBuilder::class);
+    }
+
+    /**
      * Initializes the search component.
      *
      *
@@ -49,7 +67,7 @@ class SpellcheckingComponent extends AbstractComponent implements QueryAware
     public function initializeSearchComponent()
     {
         if ($this->searchConfiguration['spellchecking']) {
-            $this->query->setSpellchecking();
+            $this->query = $this->queryBuilder->startFrom($this->query)->useSpellcheckingFromTypoScript()->getQuery();
         }
     }
 

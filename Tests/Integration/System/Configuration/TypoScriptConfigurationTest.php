@@ -1,5 +1,5 @@
 <?php
-namespace ApacheSolrForTypo3\Solr\Tests\Unit\System\Configuration;
+namespace ApacheSolrForTypo3\Solr\Tests\Integration\System\Configuration;
 
 /***************************************************************
  *  Copyright notice
@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\System\Configuration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,6 +25,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\System\Configuration;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
+use ApacheSolrForTypo3\Solr\System\Mvc\Frontend\Controller\OverriddenTypoScriptFrontendController;
 use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
@@ -40,7 +41,7 @@ class TypoScriptConfigurationTest extends IntegrationTest
      * @return void
      */
     public function setUp() {
-        $tsfe = $this->getMockBuilder(TypoScriptFrontendController::class)->setMethods([])->disableOriginalConstructor()->getMock();
+        $tsfe = $this->getMockBuilder(OverriddenTypoScriptFrontendController::class)->setMethods([])->disableOriginalConstructor()->getMock();
         $tsfe->cObjectDepthCounter = 50;
         $GLOBALS['TSFE'] = $tsfe;
         parent::setUp();

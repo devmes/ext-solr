@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\FieldProcessor;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,7 +24,7 @@ namespace ApacheSolrForTypo3\Solr\FieldProcessor;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Page\PageRepository;
 
@@ -82,7 +82,7 @@ class PageUidToHierarchy extends AbstractHierarchyProcessor implements FieldProc
      *
      * @param int $pageId Page ID to get a rootline as Solr hierarchy for
      * @param string $mountPoint The mount point parameter that will be used for building the rootline.
-     * @return string Rootline as Solr hierarchy
+     * @return array Rootline as Solr hierarchy array
      */
     protected function getSolrRootlineForPageId($pageId, $mountPoint = '')
     {

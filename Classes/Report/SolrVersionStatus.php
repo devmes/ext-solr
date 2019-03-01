@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,7 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
-use ApacheSolrForTypo3\Solr\SolrService;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrConnection;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
 use TYPO3\CMS\Reports\Status;
@@ -47,7 +47,7 @@ class SolrVersionStatus extends AbstractSolrStatus
      *
      * @var string
      */
-    const REQUIRED_SOLR_VERSION = '6.3.0';
+    const REQUIRED_SOLR_VERSION = '7.4.0';
 
     /**
      * Compiles a version check against each configured Solr server.
@@ -59,16 +59,23 @@ class SolrVersionStatus extends AbstractSolrStatus
         $solrConnections = GeneralUtility::makeInstance(ConnectionManager::class)->getAllConnections();
 
         foreach ($solrConnections as $solrConnection) {
-            /** @var $solrConnection SolrService */
-            if (!$solrConnection->ping()) {
-                $url = $solrConnection->__toString();
+            $coreAdmin = $solrConnection->getAdminService();
+            /** @var $solrConnection SolrConnection */
+            if (!$coreAdmin->ping()) {
+                $url = $coreAdmin->__toString();
                 $pingFailedMsg = 'Could not ping solr server, can not check version ' . (string)$url;
-                $status = GeneralUtility::makeInstance(Status::class, 'Apache Solr Version', 'Not accessible', $pingFailedMsg, Status::ERROR);
+                $status = GeneralUtility::makeInstance(
+                    Status::class,
+                    /** @scrutinizer ignore-type */ 'Apache Solr Version',
+                    /** @scrutinizer ignore-type */ 'Not accessible',
+                    /** @scrutinizer ignore-type */ $pingFailedMsg,
+                    /** @scrutinizer ignore-type */ Status::ERROR
+                );
                 $reports[] = $status;
                 continue;
             }
 
-            $solrVersion = $solrConnection->getSolrServerVersion();
+            $solrVersion = $coreAdmin->getSolrServerVersion();
             $isOutdatedVersion = version_compare($this->getCleanSolrVersion($solrVersion), self::REQUIRED_SOLR_VERSION, '<');
 
             if (!$isOutdatedVersion) {
@@ -76,9 +83,15 @@ class SolrVersionStatus extends AbstractSolrStatus
             }
 
             $formattedVersion = $this->formatSolrVersion($solrVersion);
-            $variables = ['requiredVersion' => self::REQUIRED_SOLR_VERSION, 'currentVersion' => $formattedVersion, 'solr' => $solrConnection];
+            $variables = ['requiredVersion' => self::REQUIRED_SOLR_VERSION, 'currentVersion' => $formattedVersion, 'solr' => $coreAdmin];
             $report = $this->getRenderedReport('SolrVersionStatus.html', $variables);
-            $status = GeneralUtility::makeInstance(Status::class, 'Apache Solr Version', 'Outdated, Unsupported', $report, Status::ERROR);
+            $status = GeneralUtility::makeInstance(
+                Status::class,
+                /** @scrutinizer ignore-type */ 'Apache Solr Version',
+                /** @scrutinizer ignore-type */ 'Outdated, Unsupported',
+                /** @scrutinizer ignore-type */ $report,
+                /** @scrutinizer ignore-type */ Status::ERROR
+            );
 
             $reports[] = $status;
         }

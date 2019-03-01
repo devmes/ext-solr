@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\ApacheSolrDocument;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,10 +25,16 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\ApacheSolrDocument;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\Parser\DocumentEscapeService;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
 use ApacheSolrForTypo3\Solr\NoSolrConnectionFoundException;
-use ApacheSolrForTypo3\Solr\Query;
 use ApacheSolrForTypo3\Solr\Search;
+use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrCommunicationException;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrConnection;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -46,10 +52,37 @@ class Repository implements SingletonInterface
     protected $search;
 
     /**
+     * @var DocumentEscapeService
+     */
+    protected $documentEscapeService = null;
+
+    /**
+     * @var TypoScriptConfiguration|null
+     */
+    protected $typoScriptConfiguration = null;
+
+    /**
+     * @var QueryBuilder
+     */
+    protected $queryBuilder;
+
+    /**
+     * Repository constructor.
+     * @param DocumentEscapeService|null $documentEscapeService
+     * @param QueryBuilder|null $queryBuilder
+     */
+    public function __construct(DocumentEscapeService $documentEscapeService = null, TypoScriptConfiguration $typoScriptConfiguration = null, QueryBuilder $queryBuilder = null)
+    {
+        $this->typoScriptConfiguration = $typoScriptConfiguration ?? Util::getSolrConfiguration();
+        $this->documentEscapeService = $documentEscapeService ?? GeneralUtility::makeInstance(DocumentEscapeService::class, /** @scrutinizer ignore-type */ $typoScriptConfiguration);
+        $this->queryBuilder = $queryBuilder ?? GeneralUtility::makeInstance(QueryBuilder::class, /** @scrutinizer ignore-type */ $this->typoScriptConfiguration);
+    }
+
+    /**
      * Returns firs found Apache_Solr_Document for current page by given language id.
      *
      * @param $languageId
-     * @return \Apache_Solr_Document|false
+     * @return Document|false
      */
     public function findOneByPageIdAndByLanguageId($pageId, $languageId)
     {
@@ -63,17 +96,43 @@ class Repository implements SingletonInterface
      *
      * @param int $pageId
      * @param int $languageId
-     * @return \Apache_Solr_Document[]
+     * @return Document[]
      */
     public function findByPageIdAndByLanguageId($pageId, $languageId)
     {
         try {
             $this->initializeSearch($pageId, $languageId);
-            $this->search->search($this->getQueryForPage($pageId), 0, 10000);
+            $pageQuery = $this->queryBuilder->buildPageQuery($pageId);
+            $response = $this->search->search($pageQuery, 0, 10000);
         } catch (NoSolrConnectionFoundException $exception) {
             return [];
+        } catch (SolrCommunicationException $exception) {
+            return [];
         }
-        return $this->search->getResultDocumentsEscaped();
+        $data = $response->getParsedData();
+        return $this->documentEscapeService->applyHtmlSpecialCharsOnAllFields($data->response->docs ?? []);
+    }
+
+    /**
+     * @param string $type
+     * @param int $uid
+     * @param int $pageId
+     * @param int $languageId
+     * @return Document[]|array
+     */
+    public function findByTypeAndPidAndUidAndLanguageId($type, $uid, $pageId, $languageId): array
+    {
+        try {
+            $this->initializeSearch($pageId, $languageId);
+            $recordQuery = $this->queryBuilder->buildRecordQuery($type, $uid, $pageId);
+            $response = $this->search->search($recordQuery, 0, 10000);
+        } catch (NoSolrConnectionFoundException $exception) {
+            return [];
+        } catch (SolrCommunicationException $exception) {
+            return [];
+        }
+        $data = $response->getParsedData();
+        return $this->documentEscapeService->applyHtmlSpecialCharsOnAllFields($data->response->docs ?? []);
     }
 
     /**
@@ -93,29 +152,17 @@ class Repository implements SingletonInterface
         $connectionManager = GeneralUtility::makeInstance(ConnectionManager::class);
         $solrConnection = $connectionManager->getConnectionByPageId($pageId, $languageId);
 
-        $this->search = GeneralUtility::makeInstance(Search::class, $solrConnection);
+        $this->search = $this->getSearch($solrConnection);
     }
 
     /**
-     * Returns Query for Saearch which finds document for given page.
-     * Note: The Connection is per language as recommended in ext-solr docs.
+     * Retrieves an instance of the Search object.
      *
-     * @return Query
+     * @param SolrConnection $solrConnection
+     * @return Search
      */
-    protected function getQueryForPage($pageId)
+    protected function getSearch($solrConnection)
     {
-        $siteRepository = GeneralUtility::makeInstance(SiteRepository::class);
-        $site = $siteRepository->getSiteByPageId($pageId);
-        /* @var Query $query */
-        $query = GeneralUtility::makeInstance(Query::class, '');
-        $query->setQueryType('standard');
-        $query->useRawQueryString(true);
-        $query->setQueryString('*:*');
-        $query->addFilter('(type:pages AND uid:' . $pageId . ') OR (*:* AND pid:' . $pageId . ' NOT type:pages)');
-        $query->addFilter('siteHash:' . $site->getSiteHash());
-        $query->setFieldList('*');
-        $query->setSorting('type asc, title asc');
-
-        return $query;
+        return  GeneralUtility::makeInstance(Search::class, /** @scrutinizer ignore-type */ $solrConnection);
     }
 }

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,6 +26,10 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
 
 use ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
+use Psr\Http\Message\ResponseInterface;
+use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Exception\ClientException;
+use TYPO3\CMS\Core\Http\RequestFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -103,16 +107,26 @@ class PageIndexerRequest
     protected $extensionConfiguration;
 
     /**
+     * @var RequestFactory
+     */
+    protected $requestFactory;
+
+    /**
      * PageIndexerRequest constructor.
      *
      * @param string $jsonEncodedParameters json encoded header
+     * @param SolrLogManager|null $solrLogManager
+     * @param ExtensionConfiguration|null $extensionConfiguration
+     * @param RequestFactory|null $requestFactory
      */
-    public function __construct($jsonEncodedParameters = null)
+    public function __construct($jsonEncodedParameters = null, SolrLogManager $solrLogManager = null, ExtensionConfiguration $extensionConfiguration = null, RequestFactory $requestFactory = null)
     {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
         $this->requestId = uniqid();
         $this->timeout = (float)ini_get('default_socket_timeout');
-        $this->extensionConfiguration = GeneralUtility::makeInstance(ExtensionConfiguration::class);
+
+        $this->logger = $solrLogManager ?? GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
+        $this->extensionConfiguration = $extensionConfiguration ?? GeneralUtility::makeInstance(ExtensionConfiguration::class);
+        $this->requestFactory = $requestFactory ?? GeneralUtility::makeInstance(RequestFactory::class);
 
         if (is_null($jsonEncodedParameters)) {
             return;
@@ -187,7 +201,7 @@ class PageIndexerRequest
         $headers = $this->getHeaders();
         $rawResponse = $this->getUrl($url, $headers, $this->timeout);
         // convert JSON response to response object properties
-        $decodedResponse = $response->getResultsFromJson($rawResponse);
+        $decodedResponse = $response->getResultsFromJson($rawResponse->getBody()->getContents());
 
         if ($rawResponse === false || $decodedResponse === false) {
             $this->logger->log(
@@ -197,8 +211,8 @@ class PageIndexerRequest
                     'request ID' => $this->requestId,
                     'request url' => $url,
                     'request headers' => $headers,
-                    'response headers' => $http_response_header, // automatically defined by file_get_contents()
-                    'raw response body' => $rawResponse
+                    'response headers' => $rawResponse->getHeaders(),
+                    'raw response body' => $rawResponse->getBody()->getContents()
                 ]
             );
 
@@ -215,7 +229,7 @@ class PageIndexerRequest
     public function getHeaders()
     {
         $headers = $this->header;
-        $headers[] = TYPO3_user_agent;
+        $headers[] = 'User-Agent: ' . $this->getUserAgent();
         $itemId = $this->indexQueueItem->getIndexQueueUid();
         $pageId = $this->indexQueueItem->getRecordPageId();
 
@@ -232,13 +246,17 @@ class PageIndexerRequest
         ];
 
         $indexerRequestData = array_merge($indexerRequestData, $this->parameters);
-        $headers[] = 'X-Tx-Solr-Iq: ' . json_encode($indexerRequestData);
-
-        if (!empty($this->username) && !empty($this->password)) {
-            $headers[] = 'Authorization: Basic ' . base64_encode($this->username . ':' . $this->password);
-        }
+        $headers[] = 'X-Tx-Solr-Iq: ' . json_encode($indexerRequestData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
 
         return $headers;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getUserAgent()
+    {
+        return $GLOBALS['TYPO3_CONF_VARS']['HTTP']['headers']['User-Agent'] ?? 'TYPO3';
     }
 
     /**
@@ -323,7 +341,7 @@ class PageIndexerRequest
      * Sets a request's parameter and its value.
      *
      * @param string $parameter Parameter name
-     * @param mixed $value Parameter value.
+     * @param string $value Parameter value.
      */
     public function setParameter($parameter, $value)
     {
@@ -382,26 +400,48 @@ class PageIndexerRequest
      * @param string $url
      * @param string[] $headers
      * @param float $timeout
-     * @return string
+     * @return ResponseInterface
+     * @throws \Exception
      */
-    protected function getUrl($url, $headers, $timeout)
+    protected function getUrl($url, $headers, $timeout): ResponseInterface
     {
-        $options = [
-            'http' => [
-                'header' => implode(CRLF, $headers),
-                'timeout' => $timeout
-            ],
-        ];
-
-        if ($this->extensionConfiguration->getIsSelfSignedCertificatesEnabled()) {
-            $options['ssl'] = [
-                'verify_peer' => false,
-                'allow_self_signed'=> true
-            ];
+        try {
+            $options = $this->buildGuzzleOptions($headers, $timeout);
+            $response = $this->requestFactory->request($url, 'GET', $options);
+        } catch (ClientException $e) {
+            $response = $e->getResponse();
+        } catch (ServerException $e) {
+            $response = $e->getResponse();
         }
 
-        $context = stream_context_create($options);
-        $rawResponse = file_get_contents($url, false, $context);
-        return $rawResponse;
+        return $response;
+    }
+
+    /**
+     * Build the options array for the guzzle client.
+     *
+     * @param array $headers
+     * @param float $timeout
+     * @return array
+     */
+    protected function buildGuzzleOptions($headers, $timeout)
+    {
+        $finalHeaders = [];
+
+        foreach ($headers as $header) {
+            list($name, $value) = explode(':', $header, 2);
+            $finalHeaders[$name] = trim($value);
+        }
+
+        $options = ['headers' => $finalHeaders, 'timeout' => $timeout];
+        if (!empty($this->username) && !empty($this->password)) {
+            $options['auth'] = [$this->username, $this->password];
+        }
+
+        if ($this->extensionConfiguration->getIsSelfSignedCertificatesEnabled()) {
+            $options['verify'] = false;
+        }
+
+        return $options;
     }
 }

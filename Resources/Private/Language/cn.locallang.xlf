@@ -56,6 +56,10 @@
 				<source>Found @resultsTotal results in @resultsTime milliseconds.</source>
 				<target>找到相关结果共 @resultsTotal 条，用时 @resultsTime 毫秒。</target>
 			</trans-unit>
+			<trans-unit id="results_found.singular" xml:space="preserve" approved="yes">
+				<source>Found 1 result in @resultsTime milliseconds.</source>
+				<target>找到相关结果共 1 条，用时 @resultsTime 毫秒。</target>
+			</trans-unit>
 			<trans-unit id="results_searched_for" xml:space="preserve" approved="yes">
 				<source>Searched for &quot;@searchWord&quot;.</source>
 				<target>搜索&quot;@searchWord&quot;</target>
@@ -65,7 +69,7 @@
 				<target>没有找到任何关于&quot;@searchWord&quot;</target>
 			</trans-unit>
 			<trans-unit id="no_results_showing_results_suggestion" xml:space="preserve" approved="yes">
-				<source>Showing results for &quot;@suggestedWord&quot;</source>
+				<source>Showing results for &quot;@suggestedWord&quot;.</source>
 				<target></target>
 			</trans-unit>
 			<trans-unit id="no_results_search_for_original" xml:space="preserve" approved="yes">

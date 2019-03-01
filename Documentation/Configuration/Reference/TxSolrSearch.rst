@@ -33,6 +33,24 @@ Sets the target page ID for links. If it is empty or 0, the current page ID will
 
 Note: This setting can be overwritten by the plugins flexform.
 
+
+trustedFields
+-------------
+
+:Type: String
+:TS Path: plugin.tx_solr.search.trustedFields
+:Default: url
+:Since: 3.1
+
+    The data in EXT:solr is escaped right after the retrieval from Solr. In rare cases when you need to store HTML in Solr documents you can use this configuration to mark these fields as trusted fields and skip the escaping. Typically this is needed when you want to retrieve html from solr.
+
+
+    The following example shows how to avoid html in the content field:
+
+.. code-block:: typoscript
+
+    plugin.tx_solr.search.trustedFields = url, content
+
 initializeWithEmptyQuery
 ------------------------
 
@@ -65,6 +83,28 @@ keepExistingParametersForNewSearches
 :Since: 2.0
 
 When doing a new search, existing parameters like filters will be carried over to the new search. This is useful for a scenario where you want to list all available documents first, then allow the user to filter the documents using facets and finally allow him to specify a search term to refine the search.
+
+ignoreGlobalQParameter
+----------------------
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.ignoreGlobalQParameter
+:Default: 0
+:Options: 0,1
+:Since: 7.0
+
+In some cases you want EXT:solr to react on the parameter "q" in the url. Normally plugins are bounded to a namespace to allow multiple instances of the search on the same page. In this case you might want to disable this and let EXT:solr only react on the namespaced query parameter (tx_solr[q] by default).
+
+additionalPersistentArgumentNames
+---------------------------------
+
+:Type: String
+:TS Path: plugin.tx_solr.search.additionalPersistentArgumentNames
+:Since: 8.0
+
+Comma-separated list of additional argument names, that should be added to the persistent arguments that are kept for sub request, like the facet and sorting urls. Hard coded argument names are q, filter and sort.
+
+Till solr version 6.5.x all parameters of the plugin namespace was added to the url again. With this setting you could enable this behavior again, but only with a whitelist of argument names.
 
 query
 -----
@@ -116,8 +156,6 @@ The option expects a string, you can also define an array in the form of arrayNa
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.query.getParameter = q
@@ -129,7 +167,7 @@ query.queryFields (query.fields)
 :Type: String
 :TS Path: plugin.tx_solr.search.query.queryFields
 :Since: 1.0
-:Default: content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0
+:Default: content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0, description^4.0, abstract^1.0, subtitle^1.0, navtitle^1.0, author^1.0
 :Note: query.fields has been renamed to query.queryFields in version 3.0
 
 Defines what fields to search in the index. Fields are defined as a comma separated list. Each field can be given a boost by appending the boost value separated by the ^ character, that's Lucene query language. The boost value itself is a float value, pay attention to using a dot as the separator for the fractions. Use this option to add more fields to search.
@@ -180,32 +218,22 @@ Technically the parameter will be mapped to the **"bf"** parameter in the solr q
 
 Use cases for example could be:
 
-* "Give never documents a higher priority":
+**"Give newer documents a higher priority":**
 
-    |
+This could be done with a recip function:
 
-    This could be done with a recip function:
+.. code-block:: bash
 
-    |
+    recip(ms(NOW,created),3.16e-11,1,1)
 
-    *recip(ms(NOW,created),3.16e-11,1,1)*
+**"Give documents with a certain field value a higher priority":**
 
-    |
+This could be done with:
 
-* "Give documents with a certain field value a higher priority":
+.. code-block:: bash
 
-    |
+    termfreq(type,'tx_solr_file')
 
-
-    This could be done with:
-
-    |
-
-    *termfreq(type,'tx_solr_file')*
-
-    |
-
-|
 
 .. _conf-tx-solr-search-boostQuery:
 
@@ -226,11 +254,21 @@ Please consult the link to the Solr wiki for a more detailed description of boos
 
 Example (boosts tt_news documents by factor 10):
 
-|
-
 .. code-block:: typoscript
 
-    plugin.tx_solr.search.query.boostQuery = (type:tt_news)\^10
+    plugin.tx_solr.search.query.boostQuery = (type:tt_news)^10
+
+
+query.tieParameter
+~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.query.tieParameter
+:Since: 8.0
+:See: `Lucene Documentation / TheDisMaxQueryParser TieParameter <http://lucene.apache.org/solr/guide/7_0/the-dismax-query-parser.html#the-tie-tie-breaker-parameter>`
+
+This parameter ties the scores together. Setting is to "0" (default) uses the maximum score of all computed scores.
+A value of "1.0" adds all scores. The value is a number between "0.0" and "1.0".
 
 
 query.filter
@@ -245,8 +283,6 @@ Allows to predefine filters to apply to a search query. You can add multiple fil
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.query.filter {
@@ -255,6 +291,14 @@ Example:
         badKeywords = {foo}
         badKeywords.wrap = -keywords:|
         badKeywords.data = GP:q
+    }
+
+Note: When you want to filter for something with whitespaces you might need to quote the filter term.
+
+.. code-block:: typoscript
+
+    plugin.tx_solr.search.query.filter {
+        johnsDoesPages = author:"John Doe"
     }
 
 
@@ -275,18 +319,147 @@ query.sortBy
 :TS Path: plugin.tx_solr.search.query.sortBy
 :Since: 1.0
 
-Allows to set a custom sorting for the query. By default Solr will sort by releavance, using this setting you can sort by any sortable field.
+Allows to set a custom sorting for the query. By default Solr will sort by relevance, using this setting you can sort by any sortable field.
 
 Needs a Solr field name followed by asc for ascending order or desc for descending.
 
 Example:
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.query.sortBy = title asc
 
+query.phrase
+~~~~~~~~~~~~
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.query.phrase
+:Since: 8.0
+:Default: 0
+:See: "pf", "ps", "qs" https://lucene.apache.org/solr/guide/6_6/the-dismax-query-parser.html#TheDisMaxQueryParser-Thepf_PhraseFields_Parameter
+
+This parameter enables the phrase search feature from Apache Solr. Setting is to "0" (default) does not change behaviour from Apache Solr if user searches for two and more words.
+Enabling phrase search feature influences the document set and/or the scores of documents.
+
+query.phrase.fields
+~~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.query.phrase.fields
+:Since: 8.0
+:Default: content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+:See: "pf" parameter https://lucene.apache.org/solr/guide/6_6/the-dismax-query-parser.html#TheDisMaxQueryParser-Thepf_PhraseFields_Parameter
+
+This parameter defines what fields should be used to search in the given phrase. Matched documents will be boosted according to fields boost value.
+Fields are defined as a comma separated list and same way as queryFields.
+
+Note: The value of this setting has NO influence on explicit phrase search.
+
+query.phrase.slop
+~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.query.phrase.slop
+:Since: 8.0
+:Default: 0
+:See: "ps" parameter https://lucene.apache.org/solr/guide/6_6/the-dismax-query-parser.html#TheDisMaxQueryParser-Theps_PhraseSlop_Parameter
+
+This parameter defines the "phrase slop" value, which represents the number of positions one word needs to be moved in relation to another word in order to match a phrase specified in a query.
+
+Note: The value of this setting has NO influence on explicit phrase search.
+
+query.phrase.querySlop
+~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.query.phrase.querySlop
+:Since: 8.0
+:Default: 0
+:See: "qs" parameter https://lucene.apache.org/solr/guide/6_6/the-dismax-query-parser.html#TheDisMaxQueryParser-Theqs_QueryPhraseSlop_Parameter
+
+This parameter defines the "phrase slop" value, which represents the number of positions one word needs to be moved in relation to another word in order to match a phrase specified in a explicit phrase search query.
+Note: On explicit("double quoted" phrase) phrase search Apache Solr searches in "qf" queryFields
+
+Note: The value of this setting has no influence on implicit phrase search.
+      On explicit phrase search the Solr searches in qf (plugin.tx_solr.search.query.queryFields) defined fields.
+
+query.bigramPhrase
+~~~~~~~~~~~~~~~~~~
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.query.bigramPhrase
+:Since: 8.0
+:Default: 0
+:See: "pf2", "ps2" https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Thepf2Parameter
+
+This parameter enables the bigram phrase search feature from Apache Solr. Setting is to "0" (default) does not change behaviour from Apache Solr if user searches for three and more words.
+Enabling bigram phrase search feature influences the scores of documents with phrase occurrences.
+
+query.bigramPhrase.fields
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.query.bigramPhrase.fields
+:Since: 8.0
+:Default: content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+:See: "pf2" parameter https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Thepf2Parameter
+
+This parameter defines what fields should be used to search in the given sentence(three+ words). Matched documents will be boosted according to fields boost value.
+Fields are defined as a comma separated list and same way as queryFields.
+
+Note: The value of this setting has NO influence on explicit phrase search.
+
+query.bigramPhrase.slop
+~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.query.bigramPhrase.slop
+:Since: 8.0
+:Default: 0
+:See: "ps2" parameter https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Theps2Parameter
+
+This parameter defines the "bigram phrase slop" value, which represents the number of positions one word needs to be moved in relation to another word in order to match a phrase specified in a query.
+
+Note: The value of this setting has NO influence on explicit phrase search.
+
+query.trigramPhrase
+~~~~~~~~~~~~~~~~~~
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.query.trigramPhrase
+:Since: 8.0
+:Default: 0
+:See: "pf3", "ps3" https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Thepf3Parameter
+
+This parameter enables the phrase search feature from Apache Solr. Setting is to "0" (default) does not change behaviour from Apache Solr if user searches for two and more words.
+Enabling phrase search feature influences the scores of documents with phrase occurrences.
+
+query.trigramPhrase.fields
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.query.trigramPhrase.fields
+:Since: 8.0
+:Default: content^10.0, title^10.0, tagsH1^10.0, tagsH2H3^10.0, tagsH4H5H6^10.0, tagsInline^10.0, description^10.0, abstract^10.0, subtitle^10.0, navtitle^10.0
+:See: "pf3" parameter https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Thepf3Parameter
+
+This parameter defines what fields should be used to search in the given phrase. Matched documents will be boosted according to fields boost value.
+Fields are defined as a comma separated list and same way as queryFields.
+
+Note: The value of this setting has NO influence on explicit phrase search.
+
+query.trigramPhrase.slop
+~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.query.trigramPhrase.slop
+:Since: 8.0
+:Default: 0
+:See: "ps3" parameter https://lucene.apache.org/solr/guide/6_6/the-extended-dismax-query-parser.html#TheExtendedDisMaxQueryParser-Theps3Parameter
+
+This parameter defines the "trigram phrase slop" value, which represents the number of positions one word needs to be moved in relation to another word in order to match a phrase specified in a query.
+
+Note: The value of this setting has NO influence on explicit phrase search.
 
 results
 -------
@@ -316,8 +489,6 @@ A comma-separated list of fields to highlight.
 
 Note: The highlighting in solr (based on FastVectorHighlighter requires a field datatype with **termVectors=on**, **termPositions=on** and **termOffsets=on** which is the case for the content field).
 If you add other fields here, make sure that you are using a datatype where this is configured.
-
-
 
 results.resultsHighlighting.fragmentSize
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -380,27 +551,6 @@ results.resultsPerPageSwitchOptions
 
 Defines the shown options of possible results per page.
 
-results.fieldProcessingInstructions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: Array
-:TS Path: plugin.tx_solr.search.results.fieldProcessingInstructions
-:Since: 1.0
-:Options: timestamp, utf8Decode, skip
-
-Mapping of fieldname to processing instructions. Available instructions: timestamp, utf8Decode, skip (removes the field from the result).
-
-The utf8Decode option has been removed in version 2.8.
-
-results.fieldRenderingInstructions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: cObject
-:TS Path: plugin.tx_solr.search.results.fieldRenderingInstructions
-:Since: 1.0
-
-Additional rendering instructions for specified fields.
-
 results.pagebrowser
 ~~~~~~~~~~~~~~~~~~~
 
@@ -431,69 +581,6 @@ results.showDocumentScoreAnalysis
 
 If enabled, the analysis and display of the score analysis for logged in backend users will be initialized.
 
-results.markResultTypeBoundaries
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: Boolean
-:TS Path: plugin.tx_solr.search.results.markResultTypeBoundaries
-:Since: 2.0, 2.5-dkd
-:Default: 0
-:Options: 0,1
-
-This option allows for some kind of fake or client side (EXT:solr being the client) grouping of results. First you need to sort results by the type field. Then whenever the type field changes during rendering of the results, special fields are added to the documents at the result document type boundary. In your template you can then use an IF condition to insert markup at those boundaries based on those fields' values. The special document field names are "typeBegin" and "typeEnd". They have a value set to the new/old document type appended with "_begin"/"end".
-
-Example:
-
-A result set with documents of types tt_news, pages, and tt_address:
-
-|
-
-.. code-block:: text
-
-    1 pages      -> typeBegin = pages_begin
-    2 pages
-    3 pages      -> typeEnd   = pages_end
-    4 tt_address -> typeBegin = tt_address_begin
-    5 tt_address
-    6 tt_address -> typeEnd   = tt_address_end
-    7 tt_news    -> typeBegin = tt_news_begin
-    8 tt_news
-    9 tt_news    -> typeEnd   = tt_news_end
-
-Example template snippet:
-
-|
-
-.. code-block:: html
-
-    <!-- ###LOOP:RESULT_DOCUMENTS### begin -->
-    <!-- ###LOOP_CONTENT### -->
-
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|pages_begin### begin -->
-    <li>Pages</li>
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|pages_begin### end -->
-
-    <!-- ... regular page results here ... -->
-
-    <!-- ###IF:###RESULT_DOCUMENT.typeEnd###|==|pages_end### begin -->
-    <li>Pages End</li>
-    <!-- ###IF:###RESULT_DOCUMENT.typeEnd###|==|pages_end### end -->
-
-    ...
-
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|tt_address_begin### begin -->
-    <li>Contacts</li>
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|tt_address_begin### end -->
-
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|tt_news_begin### begin -->
-    <li>News</li>
-    <!-- ###IF:###RESULT_DOCUMENT.typeBegin###|==|tt_news_begin### end -->
-
-    <!-- ... more markup here ... -->
-
-    <!-- ###LOOP_CONTENT### -->
-    <!-- ###LOOP:RESULT_DOCUMENTS### end -->
-
 
 spellchecking
 -------------
@@ -508,15 +595,16 @@ spellchecking
 
 Set `plugin.tx_solr.search.spellchecking = 1` to enable spellchecking / did you mean.
 
-spellchecking.wrap
-~~~~~~~~~~~~~~~~~~
+spellchecking.searchUsingSpellCheckerSuggestion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:Type: String
-:TS Path: plugin.tx_solr.search.spellchecking.wrap
-:Since: 1.0
-:Default: \|<div class="spelling-suggestions">###LLL:didYouMean### \|</div>\|
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.spellchecking.searchUsingSpellCheckerSuggestion
+:Since: 4.0
+:Default: 0
 
-This can be used to configure a custom wrap for your did you mean rendering.
+This setting can be used to trigger a new search automatically when the previous search had no results but
+suggestions from the spellchecking. In this case the user can directly see the results of the best correction option.
 
 lastSearches
 ------------
@@ -633,8 +721,8 @@ sorting.defaultOrder
 :Type: String
 :TS Path: plugin.tx_solr.search.sorting.defaultOrder
 :Since: 1.0
-:Default: ASC
-:Options: ASC, DESC
+:Default: asc
+:Options: asc, desc
 
 Sets the default sort order for all sort options.
 
@@ -644,8 +732,6 @@ sorting.options
 This is a list of sorting options. Each option has a field and label to be used. By default the options title, type, author, and created are configured, plus the virtual relevancy field which is used for sorting by default.
 
 Example:
-
-|
 
 .. code-block:: typoscript
 
@@ -665,7 +751,6 @@ Example:
         }
     }
 
-|
 
 Note: As mentioned before **relevance** is a virtual field that is used to **reset** the sorting. Sorting by relevance means to have the order provided by the scoring from solr. That the reason why sorting **descending** on relevance is not possible.
 
@@ -693,22 +778,10 @@ sorting.options.[optionName].defaultOrder
 :Type: String
 :TS Path: plugin.tx_solr.search.sorting.options.[optionName].defaultOrder
 :Since: 2.2
-:Default: ASC
-:Options: ASC, DESC
+:Default: asc
+:Options: asc, desc
 
 Sets the default sort order for a particular sort option.
-
-sorting.options.[optionName].fixedOrder
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: String
-:TS Path: plugin.tx_solr.search.sorting.options.[optionName].fixedOrder
-:Since: 2.2
-:Default: ASC
-:Options: ASC, DESC
-
-Sets a fixed sort order for a particular sort option that can not be changed.
-
 
 faceting
 --------
@@ -766,21 +839,8 @@ faceting.facetLimit
 :Since: 6.0
 :Default: 100
 
-    Number of options of a facet returned from solr.
+Number of options of a facet returned from solr.
 
-
-faceting.singleFacetMode
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: Boolean
-:TS Path: plugin.tx_solr.search.faceting.singleFacetMode
-:Since: 1.2, 2.0
-:Default: 0
-:Options: 0, 1
-
-If enabled, the user can only select an option from one facet at a time.
-
-Lets say you have two facets configured, type and author. If the user selects a facet option from type its filter is added to the query. Normally when selecting another option from the other facet - the author facet - this would lead to having two facet filters applied to the query. When this option is activated the option from the author facet will simply replace the first option from the type facet.
 
 faceting.keepAllFacetsOnSelection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -793,15 +853,24 @@ faceting.keepAllFacetsOnSelection
 
 When enabled selecting an option from a facet will not reduce the number of options available in other facets.
 
-faceting.removeFacetLinkText
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+faceting.countAllFacetsForSelection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:Type: String
-:TS Path: plugin.tx_solr.search.faceting.removeFacetLinkText
-:Since: 1.0
-:Default: @facetLabel: @facetText
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.faceting.countAllFacetsForSelection
+:Since: 8.0
+:Default: 0
+:Options: 0, 1
 
-Defines the text for a link used for removing a given facet from the search results. You can use the following placeholders in this text: @facetValue, @facetName, @facetLabel, @facetText
+When ```keepAllFacetsOnSelection``` is active the count of a facet do not get reduced. You can use ```countAllFacetsForSelection``` to achieve that.
+
+The following example shows how to keep all options of all facets by keeping the real document count, even when it has zero options:
+
+```
+plugin.tx_solr.search.faceting.keepAllFacetsOnSelection = 1
+plugin.tx_solr.search.faceting.countAllFacetsForSelection = 1
+plugin.tx_solr.search.faceting.minimumCount = 0
+```
 
 faceting.showAllLink.wrap
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -823,23 +892,6 @@ faceting.showEmptyFacets
 :Options: 0, 1
 
 By setting this option to 1, you will allow rendering of empty facets. Usually, if a facet does not offer any options to filter a resultset of documents, the facet header will not be shown. Using this option allows the header still to be rendered when no filter options are provided.
-
-faceting.facetLinkATagParams
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: String
-:TS Path: plugin.tx_solr.search.faceting.facetLinkATagParams
-:Since: 2.0
-:Default: rel="nofollow"
-
-With this option you can add A-Tag attributes for links of all facet-options.
-
-|
-
-.. code-block:: typoscript
-
-    plugin.tx_solr.search.faceting.facetLinkATagParams = class="green"
-
 
 faceting.facetLinkUrlParameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -870,8 +922,6 @@ faceting.facets
 
 Defines which fields you want to use for faceting. It's a list of facet configurations.
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.faceting.facets {
@@ -896,6 +946,33 @@ A facet will use the values of a configured index field to offer these values as
 
 To configure a facet you only need to provide the label and field configuration options, all other configuration options are optional.
 
+
+faceting.facets.[facetName].additionalExcludeTags
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].additionalExcludeTags
+:Since: 9.0
+:Required: no
+
+The settings ``keepAllOptionsOnSelection``` and ``keepAllFacetsOnSelection``` are used internally to build exclude tags for facets in order to exclude the filters from the facet counts.
+This helps to keep the counts of a facet as expected by the user, in some usecases (Read also: http://yonik.com/multi-select-faceting/).
+
+With the setting ``additionalExcludeTags``` you can add tags of factes that should be excluded from the counts as well.
+
+**Note:** This setting is only available for option facets by now.
+
+faceting.facets.[facetName].addFieldAsTag
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Boolean
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].addFieldAsTag
+:Since: 9.0
+:Required: no
+:Default: false
+
+When you want to add fields as ```additionalExcludeTags``` for a facet a tag for this facet needs to exist. You can use this setting to force the creation of a tag for this facet in the solr query.
+
 faceting.facets.[facetName].field
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -915,19 +992,74 @@ faceting.facets.[facetName].label
 :Required: yes
 
 Used as a headline or title to describe the options of a facet.
+Used in flex forms of plugin for filter labels. Can be translated with LLL: and consumed and translated in Partial/Facets/* with f:translate ViewHelper.
 
-faceting.facets.[facetName]. selectingSelectedFacetOptionRemovesFilter
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+faceting.facets.[facetName].excludeValues
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:Type: Boolean
-:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].selectingSelectedFacetOptionRemovesFilter
-:Since: 1.2, 2.0
-:Default: 0
-:Options: 0, 1
+:Type: String
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].excludeValues
+:Since: 7.0
+:Required: no
 
-Activating this option for a facet makes the facets option links behave like on/off switches: You click them once to activate a facet, you click them a second time to deactivate the facet again.
+Defines a comma separated list of options that are excluded (The value needs to match the value in solr)
 
-Feel free to suggest a better name for this option.
+Important: This setting only makes sence for option based facets (option, query, hierarchy)
+
+
+faceting.facets.[facetName].facetLimit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].facetLimit
+:Since: 8.0
+:Default: -1
+
+Hard limit of options returned by solr.
+
+**Note**: This is only available for options facets.
+
+faceting.facets.[facetName].metrics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Array
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].metrics
+:Since: 8.0
+:Default: empty
+
+Metrics can be use to collect and enhance facet options with statistical data of the facetted documents. They can
+be used to render useful information in the context of an facet option.
+
+Example:
+
+.. code-block:: typoscript
+
+    plugin.tx_solr.search.faceting.facets {
+      category {
+        field = field
+        label = Category
+        metrics {
+            downloads = sum(downloads_intS)
+        }
+      }
+    }
+
+
+The example above will make the metric "downloads" available for all category options. In this case it will be the sum of all downloads
+of this category item. In the frontend you can render this metric with "<facetoptions.>.metrics.downloads" and use it for example to show it instead of the normal option count.
+
+
+faceting.facets.[facetName].partialName
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: String
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].partialName
+:Since: 7.0
+:Required: no
+
+By convention a facet is rendered by it's default partial that is located in "Resources/Private/Partials/Facets/<Type>.html".
+
+If you want to render a single facet with another, none conventional partial, your can configure it with "partialName = MyFacetPartial".
 
 faceting.facets.[facetName].keepAllOptionsOnSelection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -941,19 +1073,6 @@ faceting.facets.[facetName].keepAllOptionsOnSelection
 Normally, when clicking any option link of a facet this would result in only that one option being displayed afterwards. By setting this option to one, you can prevent this. All options will still be displayed.
 
 This is useful if you want to allow the user to select more than one option from a single facet.
-
-faceting.facets.[facetName].singleOptionMode
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: Boolean
-:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].singleOptionMode
-:Since: 1.3, 2.0
-:Default: 0
-:Options: 0, 1
-
-When enabled together with keepAllOptionsOnSelection a user can select one option of the facet only at a time. Selecting a different option than the currently selected option results in the new option to replace the old one. The behavior thus is similar to a select box or a set of radio buttons.
-
-This option can not be used together with selectingSelectedFacetOptionRemovesFilter as it overrides its behavior.
 
 faceting.facets.[facetName].operator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -978,6 +1097,23 @@ faceting.facets.[facetName].sortBy
 Sets how a single facet's options are sorted, by default they are sorted by number of results, highest on top.
 Facet options can also be sorted alphabetically by setting the option to alpha.
 
+Note: Since 9.0.0 it is possible to sort a facet by a function. This can be done be defining a metric and use that metric in the sortBy configuration. As sorting name you then need to use by convention "metrics_<metricName>"
+
+Example:
+
+.. code-block:: typoscript
+
+    pid {
+        label = Content Type
+        field = pid
+        metrics {
+           newest = max(created)
+        }
+        sortBy = metrics_newest desc
+    }
+
+
+
 faceting.facets.[facetName].manualSortOrder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -988,8 +1124,6 @@ faceting.facets.[facetName].manualSortOrder
 By default facet options are sorted by the amount of results they will return when applied. This option allows to manually adjust the order of the facet's options. The sorting is defined as a comma-separated list of options to re-order. Options listed will be moved to the top in the order defined, all other options will remain in their original order.
 
 Example - We have a category facet like this:
-
-|
 
 .. code-block:: bash
 
@@ -1004,8 +1138,6 @@ Example - We have a category facet like this:
 
 Using `faceting.facets.[facetName].manualSortOrder = Travel, Health` will result in the following order of options:
 
-|
-
 .. code-block:: bash
 
     News Category
@@ -1016,6 +1148,21 @@ Using `faceting.facets.[facetName].manualSortOrder = Travel, Health` will result
     + Economy (185)
     + Culture (179)
     + Automobile (99)
+
+faceting.facets.[facetName].minimumCount
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:Type: Integer
+:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].minumumCount
+:Since: 8.0
+:Default: 1
+
+Set's the minimumCount for a single facet. This can be usefull e.g. to set the minimumCount of a single facet to 0,
+to have the options available even when there is result available.
+
+**Note**: This setting is only available for facets that are using the json faceting API of solr. By now this
+is only available for the options facets.
+
 
 faceting.facets.[facetName].reverseOrder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1083,8 +1230,6 @@ When setting a special type for a facet you can set further options for this typ
 
 Example (numericRange facet displayed as a slider):
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.faceting.facets.size {
@@ -1117,8 +1262,6 @@ There are two magic values for the requirement's values definition:
 
 
 Example of a category facet showing only when the user selects the news type facet option:
-
-|
 
 .. code-block:: typoscript
 
@@ -1161,8 +1304,6 @@ faceting.facets.[facetName].renderingInstruction
 Overwrites how single facet options are rendered using TypoScript cObjects.
 
 Example: (taken from issue #5920)
-
-|
 
 .. code-block:: typoscript
 
@@ -1217,8 +1358,6 @@ This rendering instruction can be used in combination with a date field or an in
 A common usecase for this is, when the datatype in solr needs to be sortable (date or int) but you need to render the date as readable date option in the frontend:
 
 
-|
-
 .. code-block:: typoscript
 
     plugin.tx_solr.search.faceting.facets {
@@ -1234,16 +1373,6 @@ A common usecase for this is, when the datatype in solr needs to be sortable (da
             }
         }
     }
-
-
-faceting.facets.[facetName].facetLinkATagParams
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: String
-:TS Path: plugin.tx_solr.search.faceting.facets.[facetName].facetLinkATagParams
-:Since: 2.0
-
-With this option you have the possibility to add A-Tag attributes for all option-links of a single facet. This option overwrites the global setting "faceting.facetLinkATagParams". See "faceting.facetLinkATagParams" for more information.
 
 elevation
 ---------

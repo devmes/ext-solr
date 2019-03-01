@@ -1,5 +1,5 @@
 <?php
-namespace ApacheSolrForTypo3\Solr\Test\System\TCA;
+namespace ApacheSolrForTypo3\Solr\Tests\Unit\System\TCA;
 
 /***************************************************************
  *  Copyright notice
@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Test\System\TCA;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -376,5 +376,96 @@ class TCAServiceTest extends UnitTest
         $tcaService = new TCAService($fakeTCA);
         $visibilityFields = $tcaService->getVisibilityAffectingFieldsByTable('tx_domain_model_faketable');
         $this->assertContains('fe_groups', $visibilityFields, 'The field fe_groups should be retrieved as visbility affecting field');
+    }
+
+    /**
+     * @test
+     */
+    public function getTranslationOriginalUid()
+    {
+        $fakeTCA = [
+            'tx_domain_model_faketable' => [
+                'ctrl' => [
+                    'transOrigPointerField' => 'l10n_parent'
+                ]
+            ]
+        ];
+
+        $tcaService = new TCAService($fakeTCA);
+        $fakeRecord = ['l10n_parent' => 999];
+
+        $l10nParentUid = $tcaService->getTranslationOriginalUid('tx_domain_model_faketable', $fakeRecord);
+        $this->assertSame(999, $l10nParentUid, 'l10nParentUid should be null when the data is not set in the record');
+    }
+
+    /**
+     * @test
+     */
+    public function getTranslationOriginalUidReturnsNullWhenFieldIsEmpty()
+    {
+        $fakeTCA = [
+            'tx_domain_model_faketable' => [
+                'ctrl' => [
+                    'transOrigPointerField' => 'l10n_parent'
+                ]
+            ]
+        ];
+
+        $tcaService = new TCAService($fakeTCA);
+        $fakeRecord = [];
+
+        $l10nParentUid = $tcaService->getTranslationOriginalUid('tx_domain_model_faketable', $fakeRecord);
+        $this->assertNull($l10nParentUid, 'l10nParentUid should be null when the data is not set in the record');
+    }
+
+    /**
+     * @test
+     */
+    public function getTranslationOriginalUidReturnsNullWhenPointerFieldIsNotConfigured()
+    {
+        $tcaService = new TCAService([]);
+        $fakeRecord = [];
+        $l10nParentUid = $tcaService->getTranslationOriginalUid('tx_domain_model_faketable', $fakeRecord);
+        $this->assertNull($l10nParentUid, 'l10nParentUid should be null when the data is not set in the record');
+    }
+
+    /**
+     * @test
+     */
+    public function isLocalizedRecord()
+    {
+        $fakeTCA = [
+            'tx_domain_model_faketable' => [
+                'ctrl' => [
+                    'transOrigPointerField' => 'l10n_parent'
+                ]
+            ]
+        ];
+
+        $tcaService = new TCAService($fakeTCA);
+
+        $this->assertFalse($tcaService->isLocalizedRecord('tx_domain_model_faketable', ['l10n_parent' => 0]), 'Item with l10n_parent => 0 should not be indicated as translation');
+        $this->assertTrue($tcaService->isLocalizedRecord('tx_domain_model_faketable', ['l10n_parent' => 9999]), 'Item with l10n_parent => 9999 should be indicated as translation');
+        $this->assertFalse($tcaService->isLocalizedRecord('tx_domain_model_faketable_withouttca', ['l10n_parent' => 9999]), 'Item without tca should not be indicated as translation');
+    }
+
+    /**
+     * @test
+     */
+    public function getTranslationOriginalUidIfTranslated()
+    {
+        $fakeTCA = [
+            'tx_domain_model_faketable' => [
+                'ctrl' => [
+                    'transOrigPointerField' => 'l10n_parent'
+                ]
+            ]
+        ];
+
+        $tcaService = new TCAService($fakeTCA);
+
+        $this->assertSame(4711, $tcaService->getTranslationOriginalUidIfTranslated('tx_domain_model_faketable', ['l10n_parent' => 0], 4711), 'No translation, original uid should be returned');
+        $this->assertSame(9999, $tcaService->getTranslationOriginalUidIfTranslated('tx_domain_model_faketable', ['l10n_parent' => 9999], 4711), 'Valid translation, uid of parent should be returned');
+        $this->assertSame(4711,$tcaService->getTranslationOriginalUidIfTranslated('tx_domain_model_faketable_withouttca', ['l10n_parent' => 9999], 4711), 'No translation, original uid should be returned');
     }
 }

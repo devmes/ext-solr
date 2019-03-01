@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -28,8 +28,11 @@ use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\NoPidException;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
 use ApacheSolrForTypo3\Solr\IndexQueue\RecordMonitor;
+use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
 use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -102,9 +105,6 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function canUpdateRootPageRecordWithoutSQLErrorFromMountPages()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('update_mount_point_is_updating_the_mount_point_correctly.xml');
 
         // we expect that the index queue is empty before we start
@@ -139,7 +139,7 @@ class RecordMonitorTest extends IntegrationTest
     public function canUseCorrectIndexingConfigurationForANewNonPagesRecord()
     {
         // create fake extension database table and TCA
-        $this->importDumpFromFixture('fake_extension_table.sql');
+        $this->importExtTablesDefinition('fake_extension_table.sql');
         $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
 
         // create faked tce main call data
@@ -177,16 +177,14 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function canQueueSubPagesWhenExtendToSubPagesWasSetAndHiddenFlagWasRemoved()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('reindex_subpages_when_extendToSubpages_set_and_hidden_removed.xml');
 
         // we expect that the index queue is empty before we start
         $this->assertEmptyIndexQueue();
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=1', ['hidden' => 0]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 1], ['hidden' => 0]);
         $changeSet = ['hidden' => 0];
 
         $dataHandler = $this->dataHandler;
@@ -202,16 +200,14 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function canQueueSubPagesWhenHiddenFlagIsSetAndExtendToSubPagesFlagWasRemoved()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('reindex_subpages_when_hidden_set_and_extendToSubpage_removed.xml');
 
         // we expect that the index queue is empty before we start
         $this->assertEmptyIndexQueue();
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=1', ['extendToSubpages' => 0]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 1], ['extendToSubpages' => 0]);
         $changeSet = ['extendToSubpages' => 0];
 
         $dataHandler = $this->dataHandler;
@@ -227,16 +223,15 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function queueIsNotFilledWhenItemIsSetToHidden()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('reindex_subpages_when_hidden_set_and_extendToSubpage_removed.xml');
 
         // we expect that the index queue is empty before we start
         $this->assertEmptyIndexQueue();
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=1', ['hidden' => 1]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 1], ['hidden' => 1]);
+
         $changeSet = ['hidden' => 1];
 
         $dataHandler = $this->dataHandler;
@@ -251,13 +246,19 @@ class RecordMonitorTest extends IntegrationTest
      *
      * @test
      */
-    public function exceptionIsThrowsWhenRecordWithoutPidIsCreated()
+    public function logMessageIsCreatedWhenRecordWithoutPidIsCreated()
     {
+        $loggerMock = $this->getMockBuilder(SolrLogManager::class)->setMethods([])->disableOriginalConstructor()->getMock();
+
+        $expectedSeverity = SolrLogManager::WARNING;
+        $expectedMessage = 'Record without valid pid was processed tx_fakeextension_domain_model_foo:NEW566a9eac309d8193936351';
+        $loggerMock->expects($this->once())->method('log')->with($expectedSeverity, $expectedMessage);
+        $this->recordMonitor->setLogger($loggerMock);
+
         // we expect that this exception is getting thrown, because a record without pid was updated
-        $this->setExpectedException(NoPidException::class);
 
         // create fake extension database table and TCA
-        $this->importDumpFromFixture('fake_extension_table.sql');
+        $this->importExtTablesDefinition('fake_extension_table.sql');
         $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
 
         // create faked tce main call data
@@ -361,16 +362,15 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function canQueueUpdatePagesWithCustomPageType()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('can_use_correct_indexing_configuration_for_a_new_custom_page_type_record.xml');
 
         // we expect that the index queue is empty before we start
         $this->assertEmptyIndexQueue();
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=8', ['hidden' => 0]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 8], ['hidden' => 0]);
+
         $changeSet = ['hidden' => 0];
 
         $dataHandler = $this->dataHandler;
@@ -390,9 +390,11 @@ class RecordMonitorTest extends IntegrationTest
     }
 
     /**
+     *
+     *
      * @test
      */
-    public function mountPointIsOnlyAddedOnceOnUpdate()
+    public function mountPointIsOnlyAddedOnceForEachTree()
     {
         $this->importDataSetFromFixture('mount_pages_are_added_once.xml');
         $this->assertEmptyIndexQueue();
@@ -410,10 +412,14 @@ class RecordMonitorTest extends IntegrationTest
 
         $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields,
             $this->dataHandler);
-        $this->assertIndexQueueContainsItemAmount(1);
+
+        // we assert that the page is added twice, once for the original tree and once for the mounted tree
+        $this->assertIndexQueueContainsItemAmount(2);
+        /* @var $indexQueue Queue */
         $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields,
             $this->dataHandler);
-        $this->assertIndexQueueContainsItemAmount(1);
+        // we assert that the page is added twice, once for the original tree and once for the mounted tree
+        $this->assertIndexQueueContainsItemAmount(2);
     }
 
     /**
@@ -425,18 +431,20 @@ class RecordMonitorTest extends IntegrationTest
         $this->assertEmptyIndexQueue();
 
         $status = 'update';
-        $table = 'pages_language_overlay';
         $uid = 2;
+        $table = 'pages';
         $fields = [
             'title' => 'New Translated Rootpage',
-            'pid' => 1
+            'l10n_parent' => 1,
+            'pid' => 0
         ];
 
         $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields,
             $this->dataHandler);
-        $this->assertIndexQueueContainsItemAmount(1);
 
+        $this->assertIndexQueueContainsItemAmount(1);
         $firstQueueItem = $this->indexQueue->getItem(1);
+
         $this->assertSame('pages', $firstQueueItem->getType(), 'First queue item has unexpected type');
         $this->assertSame('pages', $firstQueueItem->getIndexingConfigurationName(),
             'First queue item has unexpected indexingConfigurationName');
@@ -452,13 +460,10 @@ class RecordMonitorTest extends IntegrationTest
         $this->assertIndexQueueContainsItemAmount(1);
 
         $status = 'update';
-        $table = 'pages_language_overlay';
         $uid = 2;
-        $fields = [
-            'title' => 'New Translated Rootpage',
-            'pid' => 1,
-            'hidden' => 1
-        ];
+        $fields = ['title' => 'New Translated Rootpage', 'pid' => 1, 'hidden' => 1];
+
+        $table = 'pages';
 
         $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields,
             $this->dataHandler);
@@ -480,12 +485,9 @@ class RecordMonitorTest extends IntegrationTest
         $this->assertEmptyIndexQueue();
 
         $status = 'update';
-        $table = 'pages_language_overlay';
         $uid = 2;
-        $fields = [
-            'title' => 'New Translated Rootpage',
-            'pid' => 1
-        ];
+        $fields = ['title' => 'New Translated Rootpage', 'pid' => 1];
+        $table = 'pages';
 
         $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields,
             $this->dataHandler);
@@ -732,7 +734,7 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function updateRecordOutsideSiteRoot()
     {
-        $this->importDumpFromFixture('fake_extension_table.sql');
+        $this->importExtTablesDefinition('fake_extension_table.sql');
         $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
 
         $this->importDataSetFromFixture('update_record_outside_siteroot.xml');
@@ -760,7 +762,7 @@ class RecordMonitorTest extends IntegrationTest
      */
     public function updateRecordOutsideSiteRootReferencedInTwoSites()
     {
-        $this->importDumpFromFixture('fake_extension_table.sql');
+        $this->importExtTablesDefinition('fake_extension_table.sql');
         $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
 
         $this->importDataSetFromFixture('update_record_outside_siteroot_from_two_sites.xml');
@@ -773,6 +775,34 @@ class RecordMonitorTest extends IntegrationTest
         $uid = 8;
         $fields = [
             'title' => 'i am outside the site root and referenced in two sites',
+            'starttime' => 1000000,
+            'endtime' => 1100000,
+            'tsstamp' => 1000000,
+            'pid' => 3
+        ];
+
+        $this->recordMonitor->processDatamap_afterDatabaseOperations($status, $table, $uid, $fields, $this->dataHandler);
+        $this->assertIndexQueueContainsItemAmount(2);
+    }
+
+    /**
+     * @test
+     */
+    public function updateRecordOutsideSiteRootLocatedInOtherSite()
+    {
+        $this->importExtTablesDefinition('fake_extension_table.sql');
+        $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
+
+        $this->importDataSetFromFixture('update_record_outside_siteroot_from_other_siteroot.xml');
+
+        $this->assertEmptyIndexQueue();
+
+        // create faked tce main call data
+        $status = 'update';
+        $table = 'tx_fakeextension_domain_model_foo';
+        $uid = 8;
+        $fields = [
+            'title' => 'i am in siteroot b but references also in siteroot a',
             'starttime' => 1000000,
             'endtime' => 1100000,
             'tsstamp' => 1000000,
@@ -857,6 +887,44 @@ class RecordMonitorTest extends IntegrationTest
         $testConfig = [];
         $GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['solr'] = serialize($testConfig);
 
+        $this->assertIndexQueueContainsItemAmount(1);
+    }
+
+    /**
+     * This testcase checks if we can create a new testpage on the root level without any errors.
+     *
+     * @test
+     */
+    public function canCreateSiteOneRootLevel()
+    {
+        $this->importDataSetFromFixture('can_create_new_page.xml');
+        $this->setUpBackendUserFromFixture(1);
+
+        $this->assertIndexQueueContainsItemAmount(0);
+        $dataHandler = $this->getDataHandler();
+        $dataHandler->start(['pages' => ['NEW' => ['hidden' => 0]]], []);
+        $dataHandler->process_datamap();
+
+        // the item is outside a siteroot so we should not have any queue entry
+        $this->assertIndexQueueContainsItemAmount(0);
+    }
+
+    /**
+     * This testcase checks if we can create a new testpage on the root level without any errors.
+     *
+     * @test
+     */
+    public function canCreateSubPageBelowSiteRoot()
+    {
+        $this->importDataSetFromFixture('can_create_new_page.xml');
+        $this->setUpBackendUserFromFixture(1);
+
+        $this->assertIndexQueueContainsItemAmount(0);
+        $dataHandler = $this->getDataHandler();
+        $dataHandler->start(['pages' => ['NEW' => ['hidden' => 0, 'pid' => 1]]], []);
+        $dataHandler->process_datamap();
+
+        // we should have one item in the solr queue
         $this->assertIndexQueueContainsItemAmount(1);
     }
 }

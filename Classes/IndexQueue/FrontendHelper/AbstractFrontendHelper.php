@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue\FrontendHelper;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -99,7 +99,7 @@ abstract class AbstractFrontendHelper implements FrontendHelper
     ) {
         $this->request = $request;
         $this->response = $response;
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
 
         if ($request->getParameter('loggingEnabled')) {
             $this->logger->log(

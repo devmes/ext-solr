@@ -5,10 +5,6 @@
 
 .. include:: ../Includes.txt
 
-
-.. _conf-index:
-
-
 .. raw:: latex
 
     \newpage
@@ -16,6 +12,8 @@
 .. raw:: pdf
 
    PageBreak
+
+.. _faq-index:
 
 FAQ - Frequently Asked Questions
 ================================
@@ -39,7 +37,7 @@ Our issue tracker is on `GitHub <https://github.com/TYPO3-Solr/ext-solr/issues/>
 **Where can I report a security issue?**
 
 If you have found a security issue in our extension, please do not post about it in a public channel.
-Please `send us an email <mailto:team-solr@dkd.de>`_ with detailed description of found vulnerability.
+Please send an email to the `TYPO3 security team <mailto:security@typo3.org>`_ with detailed description of found vulnerability. For more details about security issue handling see `https://typo3.org/teams/security/contact-us/`
 
 |
 
@@ -87,9 +85,10 @@ We provide an addon called EXT:solrfal, that allows you to index files from FAL 
 
 |
 
-**How can i use fluid templates with EXT:solr?**
+**How can i use Fluid templates with EXT:solr < v7.0.0?**
 
-For the fluid rendering we provide the addon EXT:solrfluid, that allows you to render your search results with fluid.
+For the Fluid rendering in EXT:Solr >= 5.0 <= 6.1 we provide the addon EXT:solrfluid, that allows you to render your search results with Fluid.
+Since EXT:Solr 7.0 Fluid is the default templating engine.
 
 |
 
@@ -101,7 +100,7 @@ Please check the :ref:`appendix-version-matrix`, the you can find the proposed v
 
 **My indexed documents are empty, i can not find the content of a page?**
 
-Did you configure the search markers(`<!-- TYPO3SEARCH_begin -->` and `<!-- TYPO3SEARCH_end -->`) on your page? Check the paragraph :ref:`Search Markers` and make sure your page renders them.
+Did you configure the search markers ( "<!-- TYPO3SEARCH_begin -->" and "<!-- TYPO3SEARCH_end -->") on your page? Check the paragraph :ref:`started-search-markers` and make sure your page renders them.
 
 |
 
@@ -190,7 +189,7 @@ Example:
 
 .. code-block:: typoscript
 
-    plugin.tx_solr.search.query.queryFields = title\^20.0, title\^15.0
+    plugin.tx_solr.search.query.queryFields = title^20.0, title^15.0
 
 
 *Use boostFunctions or boostQueries*
@@ -199,7 +198,7 @@ For use cases like "*news* are always more important then *pages*" or "Newer doc
 
 *The search term only exists as a synonym*
 
-You can use the backend module synonyms (:ref:`Synonyms`) to maintain synonyms and configure solr to retrieve documents by a term that is not naturally inside the document.
+You can use the backend module synonyms (:ref:`backend-module-synonyms`) to maintain synonyms and configure solr to retrieve documents by a term that is not naturally inside the document.
 
 *Ask DKD support*
 
@@ -296,7 +295,7 @@ Yes. You need a ssl certificate (can be self signed) and change the following se
 
 ::
 
-    plugin.tx_solr.index.queue.pages.frontendDataHelper.scheme = https
+    plugin.tx_solr.index.queue.pages.indexer.frontendDataHelper.scheme = https
 
 |
 
@@ -349,23 +348,6 @@ value from the AdditionalConfiguration.php
 
 |
 
-**How can I replace jQuery and/or jQuery UI versions or use different JavaScript library for searching field used by EXT:solr?**
-
-You need to add following lines in your TypoScript setup:
-
-::
-
-    plugin.tx_solr.solr {
-        javascriptFiles {
-            library = EXT:your_site_extension/Resources/JavaScript/JQuery/jquery.XYZ.min.js
-            ui = EXT:your_site_extension/Resources/JavaScript/JQuery/jquery-ui.XYZ.min.js
-        }
-    }
-
-|
-
-For more information please see :doc:`tx_solr.javascriptFiles <../Configuration/Reference/TxSolrJavaScriptFiles>`.
-
 **I want to index extension records, what do i need to do?**
 
 EXT:solr provides a flexible indexing for TYPO3 pages and records. You can add a custom indexing configuration for your own records with a valid TCA configuration.
@@ -386,3 +368,240 @@ Yes, currently(v. 6.1) only one for initializing solr connections.
 But check for new ones with :code:`bin/typo3 list` command.
 
 |
+
+
+**I want to overwrite the type field, why is this not possible?**
+
+The type field is a system field that EXT:solr uses to keep the system in sync. Overwritting this field might result in inconsistency.
+However, if you need something like a custom type you can also write the information to a dynamic solr field and use that one as a type.
+
+The following example shows, how to fill the field "mytype_stringS" and build a facet on this field:
+
+::
+
+    plugin.tx_solr {
+        index{
+            queue{
+                news = 1
+                news {
+                    table = tt_news
+
+                    fields {
+                        mytype_stringS = TEXT
+                        mytype_stringS.value = news
+
+                    }
+                }
+            }
+        }
+        search.faceting.facets.mytype_stringS {
+             label = Type
+             field = mytype_stringS
+        }
+    }
+
+|
+
+
+**I want to implement a toggle functionality for facet options as previously possible with selectingSelectedFacetOptionRemovesFilter. How can i do that?**
+
+This is completely possible with Fluid core ViewHelpers and the domain model. The following steps are required.
+
+Register a custom partial to render the facet:
+
+::
+
+    plugin.tx_solr.search.faceting.facets.<facetName>.partialName = OptionsToggle
+
+This is the content of the OptionsToggle Partial (Feel free to adapt it to your needs):
+
+::
+
+    <h5 class="facet-label">{facet.label}</h5>
+    <ul class="facet-option-list facet-type-options fluidfacet" data-facet-name="{facet.name}" data-facet-label="{facet.label}">
+        <f:for each="{facet.options}" as="option" iteration="iteration">
+            <li class="facet-option{f:if(condition:'{iteration.index} > 9', then:' tx-solr-facet-hidden')}" data-facet-item-value="{option.value}">
+                <f:if condition="{option.selected}">
+                    <f:then><a class="facet solr-ajaxified" href="{s:uri.facet.removeFacetItem(facet: facet, facetItem: option)}">{option.label}</a></f:then>
+                    <f:else><a class="facet solr-ajaxified" href="{s:uri.facet.addFacetItem(facet: facet, facetItem: option)}">{option.label}</a></f:else>
+                </f:if>
+                <span class="facet-result-count">({option.documentCount})</span>
+            </li>
+        </f:for>
+        <f:if condition="{facet.options -> f:count()} > 10">
+            <li>
+                <a href="#" class="tx-solr-facet-show-all" data-label-more="{s:translate(key:'faceting_showMore', extensionName:'solr')}"
+                    data-label-less="{s:translate(key:'faceting_showFewer', extensionName:'solr')}">
+                    <s:translate key="faceting_showMore" extensionName="solr">Show more</s:translate>
+                </a>
+            </li>
+        </f:if>
+    </ul>
+
+**I want to store HTML in solr, how can i retrieve that?**
+
+In general it is not recommend to allow html in the solr field. Especially when you index content that can be changed by the user.
+
+However, if you want to allow html in a solr field, you need to add the field as trusted field and the content will not be escaped during the retrieval from solr.
+
+The following example shows how to avoid html in the content field:
+
+::
+
+    plugin.tx_solr.search.trustedFields = url, content
+
+
+Note: When you allow html in the content please make sure that the usage of crop ViewHelpers or a limit of the field length does not break your markup.
+
+**I want to use two instances of the search plugin on the same page, how can i do that?**
+
+If you want to use two search plugins on the same page you can add two instances and assign a different "Plugin Namespace" in the flexform. If you want to avoid, that both plugins react on the global "q" parameter, you can disable this also in the flexform. Each instance is using the querystring from <pluginNamespace>[q] then.
+
+
+**How can i configure switchable templates for the results plugin?**
+
+The following example shows, how you can configure a custom switchable entry template for the Results plugin:
+
+::
+
+   plugin.tx_solr {
+       view {
+           templateRootPaths.100 = EXT:your_config_extension/Resources/Private/Templates/
+           partialRootPaths.100 = EXT:your_config_extension/Resources/Private/Partials/
+           layoutRootPaths.100 = EXT:your_config_extension/Resources/Private/Layouts/
+           templateFiles {
+               results = Results
+               results.availableTemplates {
+                   default {
+                       label = Default Searchresults Template
+                       file = Results
+                   }
+                   products {
+                       label = Products Template
+                       file = ProductResults
+                   }
+               }
+           }
+       }
+   }
+
+
+**I want to use EXT:solr with a deployment and pass connection settings from outside e.g. by the environment, how can i do that?**
+
+When you deploy a system automatically and you use EXT:solr there are some things that might be complicated:
+
+* You want to use a different solr endpoint for each environment
+* EXT:solr depends on an existing domain record
+
+To avoid that, you can set or generate these settings in the TYPO3 AdditionalConfigruation.php file and use them in your system.
+
+To configure a used domain you cat set:
+
+::
+
+    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['sites'][###rootPageId###]['domains'] = ['mydomain.com'];
+
+You can also define the data for your solr endpoints there and use them in the typoscript:
+
+::
+
+    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['sites'][###rootPageId###]['solrhost'] = 'solr1.local';
+    $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['sites'][###rootPageId###]['solrport'] = 8083;
+
+And use them in your TypoScript configuration:
+
+::
+
+    plugin.tx_solr {
+        solr {
+            host = TEXT
+            host {
+                value = {$plugin.tx_solr.solr.host}
+                override.data = global:TYPO3_CONF_VARS|EXTCONF|solr|sites|###rootPageId###|solrhost
+            }
+            port = TEXT
+            port {
+                value = {$plugin.tx_solr.solr.port}
+                override.data = global:TYPO3_CONF_VARS|EXTCONF|solr|sites|###rootPageId###|solrport
+            }
+        }
+    }
+
+
+**I want to use faceting.facets.[facetName].singleOptionMode why was it removed?**
+
+This setting belongs to the rendering and not to the facet itself. You can implement the same behaviour just with the given ViewHelpers.
+
+The behaviour is the same, when you just call the ViewHelper s:uri.facet.setFacetItem instead of s:uri.facet.addFacetItem, which semantically just overwrites the current value.
+
+We've added an example partial "OptionsSinglemode" that shows this behaviour. The example TypoScript template "Search - (Example) Options with singlemode (only one option at a time)" shows how to use this partial in combination with the setting "keepAllOptionsOnSelection".
+
+
+**I want to build a tab facet where all options remain, even with an option count of 0. How can i do that?**
+
+This can be done with the combination of several settings:
+
+::
+
+    plugin.tx_solr.search.faceting {
+        minimumCount = 0
+        keepAllFacetsOnSelection = 1
+        facets {
+            typeTab {
+                field = type
+                keepAllOptionsOnSelection = 1
+            }
+        }
+    }
+
+The example above changes the minimumCount to 0, the default value i 1. Setting it to zero allows to have options without any results.
+The setting "keepAllFacetsOnSelection" let all facets remain and with keepAllOptionsOnSelection the options in the type facet remain.
+
+**How can i add a searchbox on every page?**
+
+In most projects you want to add a searchbox on every content page. To support this, the default EXT:solr typoscript template provides the typoscript template path "plugin.tx_solr_PiSearch_Search" that contains a configured typoscript code to render the searchbox. When you want to add that to your project in the most cases you would need to refer to a search result page.
+The following example shows how you can build a typoscript lib object that configures the target page for this plugin instance:
+
+::
+
+    lib.searchbox < plugin.tx_solr_PiSearch_Search
+    lib.searchbox.search.targetPage = 4711
+
+Afterwards you could render the typoscript path "lib.searchbox" with several ways in TYPO3, e.g. with a FLUID ViewHelper:
+
+::
+
+    <f:cObject typoscriptObjectPath="lib.searchbox" />
+
+By adding the snippet to a generic tempate you could render the searchbox on every page.
+
+**How can I index protected pages (htaccess protection)?**
+
+Protected pages can be accessed by passing the htpasswd username and password to the indexing queue.
+You can set the credentials by the following configuration:
+
+::
+
+	plugin.tx_solr.index.queue.pages.indexer.authorization.username = your_username
+	plugin.tx_solr.index.queue.pages.indexer.authorization.password = your_password
+
+::
+
+As credentials are stored as plain text, go for sure that your web server does not serve your TypoScript files publicly (protect the directory or by file endings).
+If you don't want to store plain text passwords, you can configure your web server to allow access from a specific domain (see below).
+
+If you have multiple domains to index, the webserver requires the credentials for each domain accessed by the solr indexer. The extension passes the credentials only once, so you will run into errors on a multi domain environment.
+Solution: Instead of passing the credentials as shown above, configure your webserver directory protection to allow access from the solr IP:
+
+::
+
+	AuthType Basic
+	AuthUserFile /path/to/.htpasswd
+	<RequireAny>
+	        Require ip XXX.XX.XX.XX (the IP of the solr server)
+	        Require valid-user
+	</RequireAny>
+
+::
+
+Be aware, that this will allow all accesses by given IP.

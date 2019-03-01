@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Task;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,11 +25,10 @@ namespace ApacheSolrForTypo3\Solr\Task;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Domain\Index\IndexService;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use ApacheSolrForTypo3\Solr\System\Environment\CliEnvironment;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Scheduler\ProgressProviderInterface;
-use TYPO3\CMS\Scheduler\Task\AbstractTask;
 
 /**
  * A worker indexing the items in the index queue. Needs to be set up as one
@@ -37,16 +36,8 @@ use TYPO3\CMS\Scheduler\Task\AbstractTask;
  *
  * @author Ingo Renner <ingo@typo3.org>
  */
-class IndexQueueWorkerTask extends AbstractTask implements ProgressProviderInterface
+class IndexQueueWorkerTask extends AbstractSolrTask implements ProgressProviderInterface
 {
-
-    /**
-     * The site this task is indexing.
-     *
-     * @var Site
-     */
-    protected $site;
-
     /**
      * @var int
      */
@@ -75,7 +66,8 @@ class IndexQueueWorkerTask extends AbstractTask implements ProgressProviderInter
             $cliEnvironment->initialize($this->getWebRoot());
         }
 
-        $indexService = $this->getInitializedIndexService();
+        $site = $this->getSite();
+        $indexService = $this->getInitializedIndexService($site);
         $indexService->indexItems($this->documentsToIndexLimit);
 
         if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) {
@@ -131,10 +123,16 @@ class IndexQueueWorkerTask extends AbstractTask implements ProgressProviderInter
      */
     public function getAdditionalInformation()
     {
-        $message = 'Site: ' . $this->site->getLabel();
+        $site = $this->getSite();
+
+        if (is_null($site)) {
+            return 'Invalid site configuration for scheduler please re-create the task!';
+        }
+
+        $message = 'Site: ' . $site->getLabel();
 
         /** @var $indexService \ApacheSolrForTypo3\Solr\Domain\Index\IndexService */
-        $indexService = $this->getInitializedIndexService();
+        $indexService = $this->getInitializedIndexService($site);
         $failedItemsCount = $indexService->getFailCount();
 
         if ($failedItemsCount) {
@@ -153,31 +151,15 @@ class IndexQueueWorkerTask extends AbstractTask implements ProgressProviderInter
      */
     public function getProgress()
     {
+        $site = $this->getSite();
+        if (is_null($site)) {
+            return 0.0;
+        }
+
         /** @var $indexService \ApacheSolrForTypo3\Solr\Domain\Index\IndexService */
-        $indexService = $this->getInitializedIndexService();
+        $indexService = $this->getInitializedIndexService($site);
 
         return $indexService->getProgress();
-    }
-
-    /**
-     * Gets the site / the site's root page uid this task is indexing.
-     *
-     * @return Site The site's root page uid this task is indexing
-     */
-    public function getSite()
-    {
-        return $this->site;
-    }
-
-    /**
-     * Sets the task's site to indexing.
-     *
-     * @param Site $site The site to index by this task
-     * @return void
-     */
-    public function setSite(Site $site)
-    {
-        $this->site = $site;
     }
 
     /**
@@ -215,11 +197,13 @@ class IndexQueueWorkerTask extends AbstractTask implements ProgressProviderInter
     /**
      * Returns the initialize IndexService instance.
      *
+     * @param Site $site
      * @return IndexService
+     * @internal param $Site
      */
-    protected function getInitializedIndexService()
+    protected function getInitializedIndexService(Site $site)
     {
-        $indexService = GeneralUtility::makeInstance(IndexService::class, $this->site);
+        $indexService = GeneralUtility::makeInstance(IndexService::class, /** @scrutinizer ignore-type */ $site);
         $indexService->setContextTask($this);
         return $indexService;
     }

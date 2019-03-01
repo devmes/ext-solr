@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,11 +25,8 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
-use ApacheSolrForTypo3\Solr\GarbageCollector;
-use ApacheSolrForTypo3\Solr\IndexQueue\RecordMonitor;
 use ApacheSolrForTypo3\Solr\NoSolrConnectionFoundException;
-use ApacheSolrForTypo3\Solrfal\Queue\Queue;
-use TYPO3\CMS\Core\DataHandling\DataHandler;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrConnection;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -102,10 +99,45 @@ class ConnectionManagerTest extends IntegrationTest
     }
 
     /**
+     * ConnectionManager must use the connection for site(tree), where mount Point is defined.
+     *
+     * There is following scenario:
+     *
+     *     [0]
+     *     |
+     *     ——[20] Shared-Pages (Folder)
+     *     |   |
+     *     |   ——[24] FirstShared
+     *     |       |
+     *     |       ——[25] first sub page from FirstShared
+     *     |       |
+     *     |       ——[26] second sub page from FirstShared
+     *     |
+     *     ——[ 1] Page (Root)
+     *         |
+     *         ——[14] Mount Point 1 (to [24] to show contents from)
+     *
+     * @test
+     */
+    public function canFindSolrConnectionForMountedPageIfMountPointIsGiven()
+    {
+        $this->importDataSetFromFixture('can_find_connection_for_mouted_page.xml');
+
+        /** @var $connectionManager ConnectionManager */
+        $connectionManager = GeneralUtility::makeInstance(ConnectionManager::class);
+
+        $solrService = $connectionManager->getConnectionByPageId(24, 0, '24-14');
+        $this->assertInstanceOf(SolrConnection::class, $solrService, 'Should find solr connection for level 0 of mounted page.');
+
+        $solrService1 = $connectionManager->getConnectionByPageId(25, 0, '24-14');
+        $this->assertInstanceOf(SolrConnection::class, $solrService1, 'Should find solr connection for level 1 of mounted page.');
+    }
+
+    /**
      * @test
      */
     public function exceptionIsThrownForUnAvailableSolrConnectionOnGetConfigurationByRootPageId() {
-        $this->setExpectedException(NoSolrConnectionFoundException::class);
+        $this->expectException(NoSolrConnectionFoundException::class);
 
         /** @var $connectionManager ConnectionManager */
         $connectionManager = GeneralUtility::makeInstance(ConnectionManager::class);
@@ -116,7 +148,7 @@ class ConnectionManagerTest extends IntegrationTest
      * @test
      */
     public function exceptionIsThrownForUnAvailableSolrConnectionOnGetConnectionByPageId() {
-        $this->setExpectedException(NoSolrConnectionFoundException::class);
+        $this->expectException(NoSolrConnectionFoundException::class);
 
         /** @var $connectionManager ConnectionManager */
         $connectionManager = GeneralUtility::makeInstance(ConnectionManager::class);

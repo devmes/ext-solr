@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Query\Modifier;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,8 +24,9 @@ namespace ApacheSolrForTypo3\Solr\Query\Modifier;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Query;
-use ApacheSolrForTypo3\Solr\Util;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Enables query elevation
@@ -36,6 +37,20 @@ class Elevation implements Modifier
 {
 
     /**
+     * @var QueryBuilder
+     */
+    protected $queryBuilder;
+
+    /**
+     * Elevation constructor.
+     * @param QueryBuilder|null $builder
+     */
+    public function __construct(QueryBuilder $builder = null)
+    {
+        $this->queryBuilder = $builder ?? GeneralUtility::makeInstance(QueryBuilder::class);
+    }
+
+    /**
      * Enables the query's elevation mode.
      *
      * @param Query $query The query to modify
@@ -43,13 +58,7 @@ class Elevation implements Modifier
      */
     public function modifyQuery(Query $query)
     {
-        $configuration = Util::getSolrConfiguration();
-        $query->setQueryElevation(
-            $configuration->getSearchElevation(),
-            $configuration->getSearchElevationForceElevation(),
-            $configuration->getSearchElevationMarkElevatedResults()
-        );
-
+        $query = $this->queryBuilder->startFrom($query)->useElevationFromTypoScript()->getQuery();
         return $query;
     }
 }

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Controller\Backend;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,6 +26,8 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\Controller\Backend;
 
 use ApacheSolrForTypo3\Solr\Controller\Backend\PageModuleSummary;
 use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
+use TYPO3\CMS\Backend\View\PageLayoutView;
+use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * EXT:solr offers a summary in the backend module that summarizes the extension
@@ -35,6 +37,14 @@ use ApacheSolrForTypo3\Solr\Tests\Integration\IntegrationTest;
  */
 class PageModuleSummaryTest extends IntegrationTest
 {
+    /**
+     * @return void
+     */
+    public function setUp()
+    {
+        parent::setUp();
+        $GLOBALS['LANG'] = $this->getMockBuilder(LanguageService::class)->getMock();
+    }
 
     /**
      * @test
@@ -43,15 +53,22 @@ class PageModuleSummaryTest extends IntegrationTest
         $flexFormData = $this->getFixtureContentByName('fakeFlexform.xml');
 
         $fakeRow = ['pi_flexform' => $flexFormData];
-        $data = ['row' => $fakeRow];
+        $pageLayoutViewMock = $this->getMockBuilder(PageLayoutView::class)->disableOriginalConstructor()->getMock();
+        $pageLayoutViewMock->expects($this->any())->method('linkEditContent')->will($this->returnValue('fakePluginLabel'));
+        $data = [
+            'row' => $fakeRow,
+            'pObj' => $pageLayoutViewMock
+        ];
         $summary = new PageModuleSummary();
         $result = $summary->getSummary($data);
 
-        $this->assertContains('<td>filter:filter</td>', $result, 'Summary did not contain filter');
+        $this->assertContains('fakePluginLabel', $result, 'Summary did not contain plugin label');
+        $this->assertContains('>Filter appKey</td>', $result, 'Summary did not contain filter label');
+        $this->assertContains('<td>test</td>', $result, 'Summary did not contain filter value');
         $this->assertContains('<td>sorting</td>', $result, 'Summary did not contain sorting');
         $this->assertContains('<td>boostFunction</td>', $result, 'Summary did not contain boostFunction');
         $this->assertContains('<td>boostQuery</td>', $result, 'Summary did not contain boostQuery');
         $this->assertContains('<td>10</td>', $result, 'Summary did not contain resultsPerPage');
+        $this->assertContains('<td>myTemplateFile.html</td>', $result, 'Templatefile not in summary');
     }
-
 }

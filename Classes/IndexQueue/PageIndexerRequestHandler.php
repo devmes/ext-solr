@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -71,9 +71,9 @@ class PageIndexerRequestHandler implements SingletonInterface
      */
     public function __construct()
     {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
         $this->dispatcher = GeneralUtility::makeInstance(Dispatcher::class);
-        $this->request = GeneralUtility::makeInstance(PageIndexerRequest::class, $_SERVER['HTTP_X_TX_SOLR_IQ']);
+        $this->request = GeneralUtility::makeInstance(PageIndexerRequest::class, /** @scrutinizer ignore-type */ $_SERVER['HTTP_X_TX_SOLR_IQ']);
         $this->response = GeneralUtility::makeInstance(PageIndexerResponse::class);
         $this->response->setRequestId($this->request->getRequestId());
     }
@@ -105,7 +105,7 @@ class PageIndexerRequestHandler implements SingletonInterface
         // register shutdown method here instead of in ext_localconf.php to
         // allow frontend helpers to execute at hook_eofe in
         // tslib/class.tslib_fe.php before shutting down
-        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['hook_eofe'][__CLASS__] = '&' . self::class . '->shutdown';
+        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['hook_eofe'][__CLASS__] = self::class . '->shutdown';
     }
 
     /**

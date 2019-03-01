@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -29,10 +29,11 @@ use ApacheSolrForTypo3\Solr\ConnectionManager;
 use ApacheSolrForTypo3\Solr\IndexQueue\Indexer;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
 use ApacheSolrForTypo3\Solr\Task\IndexQueueWorkerTask;
+use Solarium\Exception\HttpException;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
@@ -79,13 +80,15 @@ class IndexService
      * @param Site $site
      * @param Queue|null $queue
      * @param Dispatcher|null $dispatcher
+     * @param SolrLogManager|null $solrLogManager
      */
-    public function __construct(Site $site, Queue $queue = null, Dispatcher $dispatcher = null)
+    public function __construct(Site $site, Queue $queue = null, Dispatcher $dispatcher = null, SolrLogManager $solrLogManager = null)
     {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
         $this->site = $site;
-        $this->indexQueue = is_null($queue) ? GeneralUtility::makeInstance(Queue::class) : $queue;
-        $this->signalSlotDispatcher = is_null($dispatcher) ? GeneralUtility::makeInstance(Dispatcher::class) : $dispatcher;
+        $this->indexQueue = $queue ?? GeneralUtility::makeInstance(Queue::class);
+        $this->signalSlotDispatcher = $dispatcher ?? GeneralUtility::makeInstance(Dispatcher::class);
+        $this->logger = $solrLogManager ?? GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
+        define('EXT_SOLR_INDEXING_CONTEXT', true);
     }
 
     /**
@@ -140,7 +143,11 @@ class IndexService
         if ($enableCommitsSetting && count($itemsToIndex) > 0) {
             $solrServers = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionsBySite($this->site);
             foreach ($solrServers as $solrServer) {
-                $solrServer->commit(false, false, false);
+                try {
+                    $solrServer->getWriteService()->commit(false, false, false);
+                } catch (HttpException $e) {
+                    $errors++;
+                }
             }
         }
 
@@ -156,7 +163,7 @@ class IndexService
     protected function generateIndexingErrorLog(Item $itemToIndex, \Exception $e)
     {
         $message = 'Failed indexing Index Queue item ' . $itemToIndex->getIndexQueueUid();
-        $data = ['code' => $e->getCode(), 'message' => $e->getMessage(), 'trace' => $e->getTrace(), 'item' => (array)$itemToIndex];
+        $data = ['code' => $e->getCode(), 'message' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'item' => (array)$itemToIndex];
 
         $this->logger->log(
             SolrLogManager::ERROR,
@@ -191,22 +198,28 @@ class IndexService
         // Remember original http host value
         $originalHttpHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null;
 
-        $this->initializeHttpServerEnvironment($item);
-        $itemIndexed = $indexer->index($item);
+        $itemChangedDate = $item->getChanged();
+        $itemChangedDateAfterIndex = 0;
 
-        // update IQ item so that the IQ can determine what's been indexed already
-        if ($itemIndexed) {
-            $this->indexQueue->updateIndexTimeByItem($item);
+        try {
+            $this->initializeHttpServerEnvironment($item);
+            $itemIndexed = $indexer->index($item);
+
+            // update IQ item so that the IQ can determine what's been indexed already
+            if ($itemIndexed) {
+                $this->indexQueue->updateIndexTimeByItem($item);
+                $itemChangedDateAfterIndex = $item->getChanged();
+            }
+
+            if ($itemChangedDateAfterIndex > $itemChangedDate && $itemChangedDateAfterIndex > time()) {
+                $this->indexQueue->setForcedChangeTimeByItem($item, $itemChangedDateAfterIndex);
+            }
+        } catch (\Exception $e) {
+            $this->restoreOriginalHttpHost($originalHttpHost);
+            throw $e;
         }
 
-        if (!is_null($originalHttpHost)) {
-            $_SERVER['HTTP_HOST'] = $originalHttpHost;
-        } else {
-            unset($_SERVER['HTTP_HOST']);
-        }
-
-        // needed since TYPO3 7.5
-        GeneralUtility::flushInternalRuntimeCaches();
+        $this->restoreOriginalHttpHost($originalHttpHost);
 
         return $itemIndexed;
     }
@@ -229,7 +242,7 @@ class IndexService
         $indexerClass = $configuration->getIndexQueueIndexerByConfigurationName($indexingConfigurationName);
         $indexerConfiguration = $configuration->getIndexQueueIndexerConfigurationByConfigurationName($indexingConfigurationName);
 
-        $indexer = GeneralUtility::makeInstance($indexerClass, $indexerConfiguration);
+        $indexer = GeneralUtility::makeInstance($indexerClass, /** @scrutinizer ignore-type */ $indexerConfiguration);
         if (!($indexer instanceof Indexer)) {
             throw new \RuntimeException(
                 'The indexer class "' . $indexerClass . '" for indexing configuration "' . $indexingConfigurationName . '" is not a valid indexer. Must be a subclass of ApacheSolrForTypo3\Solr\IndexQueue\Indexer.',
@@ -280,12 +293,25 @@ class IndexService
         $hostFound = !empty($hosts[$rootpageId]);
 
         if (!$hostFound) {
-            $rootline = BackendUtility::BEgetRootLine($rootpageId);
-            $host = BackendUtility::firstDomainRecord($rootline);
-            $hosts[$rootpageId] = $host;
+            $hosts[$rootpageId] = $item->getSite()->getDomain();
         }
 
         $_SERVER['HTTP_HOST'] = $hosts[$rootpageId];
+
+        // needed since TYPO3 7.5
+        GeneralUtility::flushInternalRuntimeCaches();
+    }
+
+    /**
+     * @param string|null $originalHttpHost
+     */
+    protected function restoreOriginalHttpHost($originalHttpHost)
+    {
+        if (!is_null($originalHttpHost)) {
+            $_SERVER['HTTP_HOST'] = $originalHttpHost;
+        } else {
+            unset($_SERVER['HTTP_HOST']);
+        }
 
         // needed since TYPO3 7.5
         GeneralUtility::flushInternalRuntimeCaches();

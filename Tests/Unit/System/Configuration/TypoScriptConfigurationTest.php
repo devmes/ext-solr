@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\System\Configuration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -77,33 +77,6 @@ class TypoScriptConfigurationTest extends UnitTest
     /**
      * @test
      */
-    public function canGetFacetLinkOptionsByFacetName()
-    {
-        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
-            'search.' => [
-                'faceting.' => [
-                    'facetLinkATagParams' => 'class="all-facets"',
-                    'facets.' => [
-                        'color.' => [],
-                        'type.' => [
-                            'facetLinkATagParams' => 'class="type-facets"'
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
-        $typeATagParams = $configuration->getSearchFacetingFacetLinkATagParamsByName('type');
-        $this->assertSame('class="type-facets"', $typeATagParams, 'can not get concrete a tag param for type');
-
-        $typeATagParams = $configuration->getSearchFacetingFacetLinkATagParamsByName('color');
-        $this->assertSame('class="all-facets"', $typeATagParams, 'can not get concrete a tag param for color');
-    }
-
-    /**
-     * @test
-     */
     public function canShowEvenIfEmptyFallBackToGlobalSetting()
     {
         $fakeConfigurationArray['plugin.']['tx_solr.'] = [
@@ -147,21 +120,6 @@ class TypoScriptConfigurationTest extends UnitTest
 
         $showEmptyColor = $configuration->getSearchFacetingShowEmptyFacetsByName('color');
         $this->assertFalse($showEmptyColor);
-    }
-
-    /**
-     * @test
-     */
-    public function canGetJavaScriptFileByName()
-    {
-        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
-            'javascriptFiles.' => [
-                'ui' => 'ui.js'
-            ]
-        ];
-
-        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
-        $this->assertSame('ui.js', $configuration->getJavaScriptFileByFileKey('ui'), 'Could get configured javascript file');
     }
 
     /**
@@ -298,7 +256,7 @@ class TypoScriptConfigurationTest extends UnitTest
         $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
 
         $this->assertEquals('', $configuration->getInitialPagesAdditionalWhereClause('pages'));
-        $this->assertEquals(' AND 1=1', $configuration->getInitialPagesAdditionalWhereClause('custom'));
+        $this->assertEquals('1=1', $configuration->getInitialPagesAdditionalWhereClause('custom'));
         $this->assertEquals('', $configuration->getInitialPagesAdditionalWhereClause('notconfigured'));
     }
 
@@ -595,25 +553,6 @@ class TypoScriptConfigurationTest extends UnitTest
     /**
      * @test
      */
-    public function canGetIndexQueuePagesAllowedPageTypesArray()
-    {
-        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
-            'index.' => [
-                'queue.' => [
-                    'pages.' => [
-                        'allowedPageTypes' => '1,2, 7'
-                    ]
-                ]
-            ]
-        ];
-        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
-        $allowedPageTypes = $configuration->getIndexQueuePagesAllowedPageTypesArray();
-        $this->assertEquals([1, 2, 7], $allowedPageTypes, 'Can not get allowed pagestype from configuration');
-    }
-
-    /**
-     * @test
-     */
     public function canGetIndexQueuePagesExcludeContentByClassArray()
     {
         $fakeConfigurationArray['plugin.']['tx_solr.'] = [
@@ -718,4 +657,186 @@ class TypoScriptConfigurationTest extends UnitTest
         $this->assertEquals(['foo', 'bar'], $configuration->GetSearchQueryReturnFieldsAsArray());
     }
 
+    /**
+     * @test
+     */
+    public function canGetSearchSortingDefaultOrderBySortOptionNameIsFallingBackToDefaultSortOrder()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'sorting.' => [
+                    'defaultOrder' => 'desc',
+                    'options.' => [
+                        'title.' => [
+                            'field' => 'title',
+                            'label' => 'Titel'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $retrievedSorting = $configuration->getSearchSortingDefaultOrderBySortOptionName('title');
+        $this->assertEquals('desc', $retrievedSorting);
+    }
+
+    /**
+     * @test
+     */
+    public function canGetSearchSortingDefaultOrderBySortOptionName()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'sorting.' => [
+                    'defaultOrder' => 'desc',
+                    'options.' => [
+                        'title.' => [
+                            'defaultOrder' => 'asc',
+                            'field' => 'title',
+                            'label' => 'Titel'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $retrievedSorting = $configuration->getSearchSortingDefaultOrderBySortOptionName('title');
+        $this->assertEquals('asc', $retrievedSorting);
+    }
+
+    /**
+     * @test
+     */
+    public function canGetSearchSortingDefaultOrderBySortOptionNameInLowerCase()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'sorting.' => [
+                    'options.' => [
+                        'title.' => [
+                            'defaultOrder' => 'DESC',
+                            'field' => 'title',
+                            'label' => 'Titel'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $retrievedSorting = $configuration->getSearchSortingDefaultOrderBySortOptionName('title');
+        $this->assertEquals('desc', $retrievedSorting);
+    }
+
+    /**
+     * @test
+     */
+    public function canGetSearchGroupingHighestGroupResultsLimit()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'grouping.' => [
+                    'numberOfResultsPerGroup' => 3,
+                    'groups.' => [
+                        'typeGroup.' => [
+                            'field' => 'type',
+                            'numberOfResultsPerGroup' => 5
+                        ],
+                        'priceGroup.' => [
+                            'field' => 'price',
+                            'numberOfResultsPerGroup' => 2
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $highestResultsPerGroup = $configuration->getSearchGroupingHighestGroupResultsLimit();
+        $this->assertEquals(5, $highestResultsPerGroup, 'Can not get highest result per group value');
+    }
+
+    /**
+     * @test
+     */
+    public function canGetSearchGroupingHighestGroupResultsLimitAsGlobalFallback()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'grouping.' => [
+                    'numberOfResultsPerGroup' => 8,
+                    'groups.' => [
+                        'typeGroup.' => [
+                            'field' => 'type',
+                            'numberOfResultsPerGroup' => 5
+                        ],
+                        'priceGroup.' => [
+                            'field' => 'price',
+                            'numberOfResultsPerGroup' => 2
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $highestResultsPerGroup = $configuration->getSearchGroupingHighestGroupResultsLimit();
+        $this->assertEquals(8, $highestResultsPerGroup, 'Can not get highest result per group value');
+    }
+
+    /**
+     * @test
+     */
+    public function canGetSearchGroupingWhenDisabled()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'grouping' => 0,
+                'grouping.' => [
+                    'numberOfResultsPerGroup' => 8,
+                    'groups.' => [
+                        'typeGroup.' => [
+                            'field' => 'type',
+                            'numberOfResultsPerGroup' => 5
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+
+        $this->assertFalse($configuration->getSearchGrouping(), 'Expected grouping to be disabled');
+    }
+
+    /**
+     * @test
+     */
+    public function getSearchAdditionalPersistentArgumentNamesReturnsEmptyArrayWhenNothingIsConfigured()
+    {
+        $configuration = new TypoScriptConfiguration([]);
+        $this->assertSame([], $configuration->getSearchAdditionalPersistentArgumentNames(), 'Expected to get an empty array, when nothing configured');
+    }
+
+    /**
+     * @test
+     */
+    public function canGetAdditionalPersistentArgumentNames()
+    {
+        $fakeConfigurationArray['plugin.']['tx_solr.'] = [
+            'search.' => [
+                'additionalPersistentArgumentNames' => 'customA, customB',
+            ]
+        ];
+
+        $configuration = new TypoScriptConfiguration($fakeConfigurationArray);
+        $this->assertSame(['customA','customB'], $configuration->getSearchAdditionalPersistentArgumentNames(), 'Can not get configured custom parameters');
+    }
 }

@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -27,6 +27,8 @@ namespace ApacheSolrForTypo3\Solr;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
+
 /**
  * Substitute page indexer interface, describes the method an indexer must
  * implement to provide a substitute page document
@@ -39,9 +41,8 @@ interface SubstitutePageIndexer
     /**
      * returns a substitute document for the currently being indexed page
      *
-     * @param \Apache_Solr_Document $originalPageDocument The original page document.
-     * @return \Apache_Solr_Document returns an Apache_Solr_Document object that replace the default page document
+     * @param Document $originalPageDocument The original page document.
+     * @return Document returns an Apache_Solr_Document object that replace the default page document
      */
-    public function getPageDocument(\Apache_Solr_Document $originalPageDocument
-    );
+    public function getPageDocument(Document $originalPageDocument);
 }

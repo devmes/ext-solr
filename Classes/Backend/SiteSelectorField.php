@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Backend;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,7 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Backend;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -52,16 +52,16 @@ class SiteSelectorField
         $siteRepository = GeneralUtility::makeInstance(SiteRepository::class);
 
         $sites = $siteRepository->getAvailableSites();
-        $selector = '<select name="' . $selectorName . '" class="form-control">';
+        $selector = '<select name="' . htmlspecialchars($selectorName) . '" class="form-control">';
 
         foreach ($sites as $site) {
             $selectedAttribute = '';
-            if ($selectedSite !== null && $site->getRootPageId() == $selectedSite->getRootPageId()) {
+            if ($selectedSite !== null && $site->getRootPageId() === $selectedSite->getRootPageId()) {
                 $selectedAttribute = ' selected="selected"';
             }
 
-            $selector .= '<option value="' . $site->getRootPageId() . '"' . $selectedAttribute . '>'
-                . $site->getLabel()
+            $selector .= '<option value="' . htmlspecialchars($site->getRootPageId()) . '"' . $selectedAttribute . '>'
+                . htmlspecialchars($site->getLabel())
                 . '</option>';
         }
 

@@ -5,7 +5,7 @@
         <uid>4711</uid>
         <entry_namespace>tx_solr</entry_namespace>
         <entry_key>servers</entry_key>
-        <entry_value>a:1:{s:3:"1|0";a:9:{s:13:"connectionKey";s:3:"1|0";s:13:"rootPageTitle";s:15:"Congratulations";s:11:"rootPageUid";s:1:"1";s:10:"solrScheme";s:4:"http";s:8:"solrHost";s:9:"localhost";s:8:"solrPort";s:4:"8999";s:8:"solrPath";s:14:"/solr/core_en/";s:8:"language";i:0;s:5:"label";s:74:"Congratulations (pid: 1, language: default) - localhost:8999/solr/core_en/";}}</entry_value>
+        <entry_value>a:1:{s:3:"1|0";a:7:{s:13:"connectionKey";s:3:"1|0";s:13:"rootPageTitle";s:15:"Congratulations";s:11:"rootPageUid";s:1:"1";s:8:"language";i:0;s:5:"label";s:74:"Congratulations (pid: 1, language: default) - localhost:8999/solr/core_en/";s:4:"read";a:4:{s:6:"scheme";s:4:"http";s:4:"host";s:9:"localhost";s:4:"port";s:4:"8999";s:4:"path";s:14:"/solr/core_en/";}s:5:"write";a:4:{s:6:"scheme";s:4:"http";s:4:"host";s:9:"localhost";s:4:"port";s:4:"8999";s:4:"path";s:14:"/solr/core_en/";}}}</entry_value>
     </sys_registry>
 
     <sys_template>
@@ -67,36 +67,6 @@
                         host   = localhost
                         port   = 8999
                         path   = /solr/core_en/
-                    }
-
-                    templateFiles {
-                        frequentSearches = EXT:solr/Resources/Templates/PiFrequentSearches/frequentsearches.htm
-                        pagebrowser      = EXT:solr/Resources/Templates/PiResults/pagebrowser.htm
-                        results          = EXT:solr/Resources/Templates/PiResults/results.htm
-                        search           = EXT:solr/Resources/Templates/PiSearch/search.htm
-                    }
-
-                    cssFiles {
-                        results = EXT:solr/Resources/Css/PiResults/results.css
-                        ui      = EXT:solr/Resources/Css/JQueryUi/jquery-ui.custom.css
-                    }
-
-                    javascriptFiles {
-                        loadIn = footer
-
-                        library = EXT:solr/Resources/JavaScript/JQuery/jquery.min.js
-
-                        ui = EXT:solr/Resources/JavaScript/JQuery/jquery-ui.min.js
-
-                        ui.datepicker.de = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-de.js
-                        ui.datepicker.fr = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-fr.js
-                        ui.datepicker.nl = EXT:solr/Resources/JavaScript/JQuery/ui-i18n/jquery.ui.datepicker-nl.js
-
-                        suggest = EXT:solr/Resources/JavaScript/EidSuggest/suggest.js
-
-                        faceting.limitExpansion     = EXT:solr/Resources/JavaScript/PiResults/results.js
-                        faceting.dateRangeHelper    = EXT:solr/Resources/JavaScript/PiResults/date_range_facet.js
-                        faceting.numericRangeHelper = EXT:solr/Resources/JavaScript/PiResults/numeric_range_facet.js
                     }
 
                     index {
@@ -167,7 +137,7 @@
                             allowedSites = __solr_current_site
 
                             // qf parameter http://wiki.apache.org/solr/DisMaxQParserPlugin#qf_.28Query_Fields.29
-                            queryFields = content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0
+                            queryFields = content^40.0, title^5.0, keywords^2.0, tagsH1^5.0, tagsH2H3^3.0, tagsH4H5H6^2.0, tagsInline^1.0, description^4.0, abstract^1.0, subtitle^1.0, navtitle^1.0, author^1.0
 
                             // fl parameter http://wiki.apache.org/solr/CommonQueryParameters#fl
                             returnFields = *, score
@@ -221,44 +191,6 @@
                                 spell = skip
                             }
 
-                            fieldRenderingInstructions {
-
-                                url = CASE
-                                url {
-                                    key.field = type
-
-                                    default = TEXT
-                                    default {
-                                        field = url
-                                        htmlSpecialChars = 1
-                                        htmlSpecialChars.preserveEntities = 1
-                                    }
-                                }
-
-                                link = CASE
-                                link {
-                                    key.field = type
-
-                                    pages  = TEXT
-                                    pages {
-                                        field = title
-
-                                        typolink {
-                                            parameter.field = uid
-                                        }
-                                    }
-
-                                    default  = TEXT
-                                    default {
-                                        field = title
-
-                                        typolink {
-                                            parameter.field = url
-                                            extTarget =
-                                        }
-                                    }
-                                }
-                            }
                             showDocumentScoreAnalysis = 0
                         }
                     }

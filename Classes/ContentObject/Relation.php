@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\ContentObject;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,10 +24,14 @@ namespace ApacheSolrForTypo3\Solr\ContentObject;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\System\Language\FrontendOverlayService;
+use ApacheSolrForTypo3\Solr\System\TCA\TCAService;
+use Doctrine\DBAL\Driver\Statement;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\RelationHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
-use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * A content object (cObj) to resolve relations between database records
@@ -57,13 +61,26 @@ class Relation
     protected $configuration = [];
 
     /**
-     * Constructor.
-     *
+     * @var TCAService
      */
-    public function __construct()
+    protected $tcaService = null;
+
+    /**
+     * @var FrontendOverlayService
+     */
+    protected $frontendOverlayService = null;
+
+    /**
+     * Relation constructor.
+     * @param TCAService|null $tcaService
+     * @param FrontendOverlayService|null $frontendOverlayService
+     */
+    public function __construct(TCAService $tcaService = null, FrontendOverlayService $frontendOverlayService = null)
     {
         $this->configuration['enableRecursiveValueResolution'] = 1;
         $this->configuration['removeEmptyValues'] = 1;
+        $this->tcaService = $tcaService ?? GeneralUtility::makeInstance(TCAService::class);
+        $this->frontendOverlayService = $frontendOverlayService ?? GeneralUtility::makeInstance(FrontendOverlayService::class);
     }
 
     /**
@@ -95,12 +112,7 @@ class Relation
 
         if (empty($configuration['multiValue'])) {
             // single value, need to concatenate related items
-            $singleValueGlue = ', ';
-
-            if (!empty($configuration['singleValueGlue'])) {
-                $singleValueGlue = trim($configuration['singleValueGlue'], '|');
-            }
-
+            $singleValueGlue = !empty($configuration['singleValueGlue']) ? trim($configuration['singleValueGlue'], '|') : ', ';
             $result = implode($singleValueGlue, $relatedItems);
         } else {
             // multi value, need to serialize as content objects must return strings
@@ -116,27 +128,23 @@ class Relation
      * @param ContentObjectRenderer $parentContentObject parent content object
      * @return array Array of related items, values already resolved from related records
      */
-    protected function getRelatedItems(
-        ContentObjectRenderer $parentContentObject
-    ) {
-        $relatedItems = [];
+    protected function getRelatedItems(ContentObjectRenderer $parentContentObject)
+    {
+        list($table, $uid) = explode(':', $parentContentObject->currentRecord);
+        $uid = (int) $uid;
+        $field = $this->configuration['localField'];
 
-        list($localTableName, $localRecordUid) = explode(':',
-            $parentContentObject->currentRecord);
+        if (!$this->tcaService->getHasConfigurationForField($table, $field)) {
+            return [];
+        }
 
-        $localTableTca = $GLOBALS['TCA'][$localTableName];
-        $localFieldName = $this->configuration['localField'];
+        $overlayUid = $this->frontendOverlayService->getUidOfOverlay($table, $field, $uid);
+        $fieldTCA = $this->tcaService->getConfigurationForField($table, $field);
 
-        if (isset($localTableTca['columns'][$localFieldName])) {
-            $localFieldTca = $localTableTca['columns'][$localFieldName];
-            $localRecordUid = $this->getUidOfRecordOverlay($localTableName, $localRecordUid);
-            if (isset($localFieldTca['config']['MM']) && trim($localFieldTca['config']['MM']) !== '') {
-                $relatedItems = $this->getRelatedItemsFromMMTable($localTableName,
-                    $localRecordUid, $localFieldTca);
-            } else {
-                $relatedItems = $this->getRelatedItemsFromForeignTable($localTableName,
-                    $localRecordUid, $localFieldTca, $parentContentObject);
-            }
+        if (isset($fieldTCA['config']['MM']) && trim($fieldTCA['config']['MM']) !== '') {
+            $relatedItems = $this->getRelatedItemsFromMMTable($table, $overlayUid, $fieldTCA);
+        } else {
+            $relatedItems = $this->getRelatedItemsFromForeignTable($table, $overlayUid, $fieldTCA, $parentContentObject);
         }
 
         return $relatedItems;
@@ -150,14 +158,11 @@ class Relation
      * @param array $localFieldTca The local table's TCA
      * @return array Array of related items, values already resolved from related records
      */
-    protected function getRelatedItemsFromMMTable(
-        $localTableName,
-        $localRecordUid,
-        array $localFieldTca
-    ) {
+    protected function getRelatedItemsFromMMTable($localTableName, $localRecordUid, array $localFieldTca)
+    {
         $relatedItems = [];
         $foreignTableName = $localFieldTca['config']['foreign_table'];
-        $foreignTableTca = $GLOBALS['TCA'][$foreignTableName];
+        $foreignTableTca = $this->tcaService->getTableConfiguration($foreignTableName);
         $foreignTableLabelField = $this->resolveForeignTableLabelField($foreignTableTca);
         $mmTableName = $localFieldTca['config']['MM'];
 
@@ -175,17 +180,15 @@ class Relation
             return $relatedItems;
         }
 
-        $pageSelector = GeneralUtility::makeInstance(PageRepository::class);
-        $whereClause = $pageSelector->enableFields($foreignTableName);
-        $relatedRecords = $this->getRelatedRecords($foreignTableName, $selectUids, $whereClause);
+        $relatedRecords = $this->getRelatedRecords($foreignTableName, ...$selectUids);
         foreach ($relatedRecords as $record) {
             if (isset($foreignTableTca['columns'][$foreignTableLabelField]['config']['foreign_table'])
                 && $this->configuration['enableRecursiveValueResolution']
             ) {
                 if (strpos($this->configuration['foreignLabelField'], '.') !== false) {
-                    $foreignLabelFieldArr = explode('.', $this->configuration['foreignLabelField']);
-                    unset($foreignLabelFieldArr[0]);
-                    $this->configuration['foreignLabelField'] = implode('.', $foreignLabelFieldArr);
+                    $foreignTableLabelFieldArr = explode('.', $this->configuration['foreignLabelField']);
+                    unset($foreignTableLabelFieldArr[0]);
+                    $this->configuration['foreignLabelField'] = implode('.', $foreignTableLabelFieldArr);
                 }
 
                 $this->configuration['localField'] = $foreignTableLabelField;
@@ -196,7 +199,7 @@ class Relation
                 return $this->getRelatedItems($contentObject);
             } else {
                 if ($GLOBALS['TSFE']->sys_language_uid > 0) {
-                    $record = $this->getTranslationOverlay($foreignTableName, $record);
+                    $record = $this->frontendOverlayService->getOverlay($foreignTableName, $record);
                 }
                 $relatedItems[] = $record[$foreignTableLabelField];
             }
@@ -231,22 +234,6 @@ class Relation
     }
 
     /**
-     * Return the translated record
-     *
-     * @param string $tableName
-     * @param array $record
-     * @return array
-     */
-    protected function getTranslationOverlay($tableName, $record)
-    {
-        if ($tableName == 'pages') {
-            return $GLOBALS['TSFE']->sys_page->getPageOverlay($record, $GLOBALS['TSFE']->sys_language_uid);
-        }
-
-        return $GLOBALS['TSFE']->sys_page->getRecordOverlay($tableName, $record, $GLOBALS['TSFE']->sys_language_uid);
-    }
-
-    /**
      * Gets the related items from a table using a 1:n relation.
      *
      * @param string $localTableName Local table name
@@ -263,14 +250,13 @@ class Relation
     ) {
         $relatedItems = [];
         $foreignTableName = $localFieldTca['config']['foreign_table'];
-        $foreignTableTca = $GLOBALS['TCA'][$foreignTableName];
+        $foreignTableTca = $this->tcaService->getTableConfiguration($foreignTableName);
         $foreignTableLabelField = $this->resolveForeignTableLabelField($foreignTableTca);
 
             /** @var $relationHandler RelationHandler */
         $relationHandler = GeneralUtility::makeInstance(RelationHandler::class);
 
-        $itemList = isset($parentContentObject->data[$this->configuration['localField']]) ?
-                        $parentContentObject->data[$this->configuration['localField']] : '';
+        $itemList = $parentContentObject->data[$this->configuration['localField']] ?? '';
 
         $relationHandler->start($itemList, $foreignTableName, '', $localRecordUid, $localTableName, $localFieldTca['config']);
         $selectUids = $relationHandler->tableArray[$foreignTableName];
@@ -279,9 +265,7 @@ class Relation
             return $relatedItems;
         }
 
-        $pageSelector = GeneralUtility::makeInstance(PageRepository::class);
-        $whereClause  = $pageSelector->enableFields($foreignTableName);
-        $relatedRecords = $this->getRelatedRecords($foreignTableName, $selectUids, $whereClause);
+        $relatedRecords = $this->getRelatedRecords($foreignTableName, ...$selectUids);
 
         foreach ($relatedRecords as $relatedRecord) {
             $resolveRelatedValue = $this->resolveRelatedValue(
@@ -319,7 +303,7 @@ class Relation
         $foreignTableName = ''
     ) {
         if ($GLOBALS['TSFE']->sys_language_uid > 0 && !empty($foreignTableName)) {
-            $relatedRecord = $this->getTranslationOverlay($foreignTableName, $relatedRecord);
+            $relatedRecord = $this->frontendOverlayService->getOverlay($foreignTableName, $relatedRecord);
         }
 
         $value = $relatedRecord[$foreignTableLabelField];
@@ -353,7 +337,7 @@ class Relation
             $value = array_pop($relatedItemsFromForeignTable);
 
             // restore
-            $this->configuration= $backupConfiguration;
+            $this->configuration = $backupConfiguration;
             $parentContentObject->data = $backupRecord;
         }
 
@@ -361,58 +345,46 @@ class Relation
     }
 
     /**
-     * When the record has an overlay we retrieve the uid of the translated record,
-     * to resolve the relations from the translation.
-     *
-     * @param string $localTableName
-     * @param int $localRecordUid
-     * @return int
-     */
-    protected function getUidOfRecordOverlay($localTableName, $localRecordUid)
-    {
-        // when no language is set at all we do not need to overlay
-        if (!isset($GLOBALS['TSFE']->sys_language_uid)) {
-            return $localRecordUid;
-        }
-        // when no language is set we can return the passed recordUid
-        if (!$GLOBALS['TSFE']->sys_language_uid > 0) {
-            return $localRecordUid;
-        }
-        /** @var  $db  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $db = $GLOBALS['TYPO3_DB'];
-        $record = $db->exec_SELECTgetSingleRow('*', $localTableName, 'uid = ' . $localRecordUid);
-
-        // when the overlay is not an array, we return the localRecordUid
-        if (!is_array($record)) {
-            return $localRecordUid;
-        }
-
-        $record = $this->getTranslationOverlay($localTableName, $record);
-        // when there is a _LOCALIZED_UID in the overlay, we return it
-        $localRecordUid = $record['_LOCALIZED_UID'] ? $record['_LOCALIZED_UID'] : $localRecordUid;
-        return $localRecordUid;
-    }
-
-    /**
      * Return records via relation.
      *
      * @param string $foreignTable The table to fetch records from.
-     * @param array $uids The uids to fetch from table.
-     * @param string $whereClause The where clause to append.
-     *
+     * @param int[] ...$uids The uids to fetch from table.
      * @return array
      */
-    protected function getRelatedRecords($foreignTable, array $uids, $whereClause)
+    protected function getRelatedRecords($foreignTable, int ...$uids): array
     {
+        /** @var QueryBuilder $queryBuilder */
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($foreignTable);
+        $queryBuilder->select('*')
+            ->from($foreignTable)
+            ->where($queryBuilder->expr()->in('uid', $uids));
         if (isset($this->configuration['additionalWhereClause'])) {
-            $whereClause .= ' AND ' . $this->configuration['additionalWhereClause'];
+            $queryBuilder->andWhere($this->configuration['additionalWhereClause']);
         }
+        $statement = $queryBuilder->execute();
 
-        return $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            '*',
-            $foreignTable,
-            'uid IN (' . implode(',', $uids) . ')'
-            . $whereClause
-        );
+        return $this->sortByKeyInIN($statement, 'uid', ...$uids);
+    }
+
+    /**
+     * Sorts the result set by key in array for IN values.
+     *   Simulates MySqls ORDER BY FIELD(fieldname, COPY_OF_IN_FOR_WHERE)
+     *   Example: SELECT * FROM a_table WHERE field_name IN (2, 3, 4) SORT BY FIELD(field_name, 2, 3, 4)
+     *
+     *
+     * @param Statement $statement
+     * @param string $columnName
+     * @param array $arrayWithValuesForIN
+     * @return array
+     */
+    protected function sortByKeyInIN(Statement $statement, string $columnName, ...$arrayWithValuesForIN) : array
+    {
+        $records = [];
+        while ($record = $statement->fetch()) {
+            $indexNumber = array_search($record[$columnName], $arrayWithValuesForIN);
+            $records[$indexNumber] = $record;
+        }
+        ksort($records);
+        return $records;
     }
 }

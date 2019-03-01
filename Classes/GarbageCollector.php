@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,6 +24,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\Domain\Index\Queue\GarbageRemover\StrategyFactory;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
 use ApacheSolrForTypo3\Solr\System\TCA\TCAService;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
@@ -59,7 +60,7 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
     public function __construct(TCAService $TCAService = null)
     {
         parent::__construct();
-        $this->tcaService = is_null($TCAService) ? GeneralUtility::makeInstance(TCAService::class) : $TCAService;
+        $this->tcaService = $TCAService ?? GeneralUtility::makeInstance(TCAService::class);
     }
 
     /**
@@ -72,20 +73,13 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      * @param DataHandler $tceMain TYPO3 Core Engine parent object, not used
      * @return void
      */
-    public function processCmdmap_preProcess(
-        $command,
-        $table,
-        $uid,
-        /** @noinspection PhpUnusedParameterInspection */
-        $value,
-        /** @noinspection PhpUnusedParameterInspection */
-        DataHandler $tceMain
-    ) {
+    public function processCmdmap_preProcess($command, $table, $uid, $value, DataHandler $tceMain)
+    {
         // workspaces: collect garbage only for LIVE workspace
-        if ($command == 'delete' && $GLOBALS['BE_USER']->workspace == 0) {
+        if ($command === 'delete' && $GLOBALS['BE_USER']->workspace == 0) {
             $this->collectGarbage($table, $uid);
 
-            if ($table == 'pages') {
+            if ($table === 'pages') {
                 $this->getIndexQueue()->deleteItem($table, $uid);
             }
         }
@@ -123,66 +117,8 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      */
     public function collectGarbage($table, $uid)
     {
-        if ($table == 'tt_content' || $table == 'pages' || $table == 'pages_language_overlay') {
-            $this->collectPageGarbage($table, $uid);
-        } else {
-            $this->collectRecordGarbage($table, $uid);
-        }
-
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['postProcessGarbageCollector'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['postProcessGarbageCollector'] as $classReference) {
-                $garbageCollectorPostProcessor = GeneralUtility::getUserObj($classReference);
-
-                if ($garbageCollectorPostProcessor instanceof GarbageCollectorPostProcessor) {
-                    $garbageCollectorPostProcessor->postProcessGarbageCollector($table,
-                        $uid);
-                } else {
-                    throw new \UnexpectedValueException(
-                        get_class($garbageCollectorPostProcessor) . ' must implement interface ' . GarbageCollectorPostProcessor::class,
-                        1345807460
-                    );
-                }
-            }
-        }
-    }
-
-    /**
-     * Tracks down index documents belonging to a particular page and
-     * removes them from the index and the Index Queue.
-     *
-     * @param string $table The record's table name.
-     * @param int $uid The record's uid.
-     */
-    protected function collectPageGarbage($table, $uid)
-    {
-        switch ($table) {
-            case 'tt_content':
-                $contentElement = BackendUtility::getRecord('tt_content', $uid, 'uid, pid', '', false);
-
-                $table = 'pages';
-                $uid = $contentElement['pid'];
-
-                $this->deleteIndexDocuments($table, $uid);
-                // only a content element was removed, now update/re-index the page
-                $this->getIndexQueue()->updateItem($table, $uid);
-                break;
-            case 'pages_language_overlay':
-                $pageOverlayRecord = BackendUtility::getRecord('pages_language_overlay', $uid, 'uid, pid', '', false);
-
-                $table = 'pages';
-                $uid = $pageOverlayRecord['pid'];
-
-                $this->deleteIndexDocuments($table, $uid);
-                // only a page overlay was removed, now update/re-index the page
-                $this->getIndexQueue()->updateItem($table, $uid);
-                break;
-            case 'pages':
-
-                $this->deleteIndexDocuments($table, $uid);
-                $this->getIndexQueue()->deleteItem($table, $uid);
-
-                break;
-        }
+        $garbageRemoverStrategy = StrategyFactory::getByTable($table);
+        $garbageRemoverStrategy->removeGarbageOf($table, $uid);
     }
 
     /**
@@ -196,56 +132,12 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
             return;
         }
 
-        $indexQueue = $this->getIndexQueue();
         // get affected subpages when "extendToSubpages" flag was set
         $pagesToDelete = $this->getSubPageIds($uid);
         // we need to at least remove this page
         foreach ($pagesToDelete as $pageToDelete) {
-            $this->deleteIndexDocuments($table, $pageToDelete);
-            $indexQueue->deleteItem($table, $pageToDelete);
+            $this->collectGarbage($table, $pageToDelete);
         }
-    }
-
-    /**
-     * Deletes index documents for a given record identification.
-     *
-     * @param string $table The record's table name.
-     * @param int $uid The record's uid.
-     */
-    protected function deleteIndexDocuments($table, $uid)
-    {
-        /** @var $connectionManager ConnectionManager */
-        $connectionManager = GeneralUtility::makeInstance(ConnectionManager::class);
-
-        // record can be indexed for multiple sites
-        $indexQueueItems = $this->getIndexQueue()->getItems($table, $uid);
-        foreach ($indexQueueItems as $indexQueueItem) {
-            $site = $indexQueueItem->getSite();
-            $solrConfiguration = $site->getSolrConfiguration();
-            $enableCommitsSetting = $solrConfiguration->getEnableCommits();
-
-            // a site can have multiple connections (cores / languages)
-            $solrConnections = $connectionManager->getConnectionsBySite($site);
-            foreach ($solrConnections as $solr) {
-                $solr->deleteByQuery('type:' . $table . ' AND uid:' . intval($uid));
-                if ($enableCommitsSetting) {
-                    $solr->commit(false, false, false);
-                }
-            }
-        }
-    }
-
-    /**
-     * Tracks down index documents belonging to a particular record and
-     * removes them from the index and the Index Queue.
-     *
-     * @param string $table The record's table name.
-     * @param int $uid The record's uid.
-     */
-    protected function collectRecordGarbage($table, $uid)
-    {
-        $this->deleteIndexDocuments($table, $uid);
-        $this->getIndexQueue()->deleteItem($table, $uid);
     }
 
     // methods checking whether to trigger garbage collection
@@ -259,17 +151,9 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      * @param string $value Not used
      * @param DataHandler $tceMain TYPO3 Core Engine parent object, not used
      */
-    public function processCmdmap_postProcess(
-        $command,
-        $table,
-        $uid,
-        /** @noinspection PhpUnusedParameterInspection */
-        $value,
-        /** @noinspection PhpUnusedParameterInspection */
-        DataHandler $tceMain
-    ) {
+    public function processCmdmap_postProcess($command, $table, $uid, $value, DataHandler $tceMain) {
         // workspaces: collect garbage only for LIVE workspace
-        if ($command == 'move' && $table == 'pages' && $GLOBALS['BE_USER']->workspace == 0) {
+        if ($command === 'move' && $table === 'pages' && $GLOBALS['BE_USER']->workspace == 0) {
             // TODO the below comment is not valid anymore, pid has been removed from doc ID
             // ...still needed?
 
@@ -292,14 +176,8 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      * @param mixed $uid The record's uid, [integer] or [string] (like 'NEW...')
      * @param DataHandler $tceMain TYPO3 Core Engine parent object, not used
      */
-    public function processDatamap_preProcessFieldArray(
-        /** @noinspection PhpUnusedParameterInspection */
-        $incomingFields,
-        $table,
-        $uid,
-        /** @noinspection PhpUnusedParameterInspection */
-        DataHandler $tceMain
-    ) {
+    public function processDatamap_preProcessFieldArray($incomingFields, $table, $uid, DataHandler $tceMain)
+    {
         if (!is_int($uid)) {
             // a newly created record, skip
             return;
@@ -311,27 +189,21 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
         }
 
         $hasConfiguredEnableColumnForFeGroup = $this->tcaService->isEnableColumn($table, 'fe_group');
-
-        if ($hasConfiguredEnableColumnForFeGroup) {
-            $visibilityAffectingFields = $this->tcaService->getVisibilityAffectingFieldsByTable($table);
-            $record = (array)BackendUtility::getRecord(
-                $table,
-                $uid,
-                $visibilityAffectingFields,
-                '',
-                false
-            );
-
-            // If no record could be found skip further processing
-            if (empty($record)) {
-                return;
-            }
-
-            $record = $this->tcaService->normalizeFrontendGroupField($table, $record);
-
-            // keep previous state of important fields for later comparison
-            $this->trackedRecords[$table][$uid] = $record;
+        if (!$hasConfiguredEnableColumnForFeGroup) {
+            return;
         }
+
+        $visibilityAffectingFields = $this->tcaService->getVisibilityAffectingFieldsByTable($table);
+        $record = (array)BackendUtility::getRecord($table, $uid, $visibilityAffectingFields, '', false);
+        // If no record could be found skip further processing
+        if (empty($record)) {
+            return;
+        }
+
+        $record = $this->tcaService->normalizeFrontendGroupField($table, $record);
+
+        // keep previous state of important fields for later comparison
+        $this->trackedRecords[$table][$uid] = $record;
     }
 
     /**
@@ -345,15 +217,9 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      * @param array $fields The record's data, not used
      * @param DataHandler $tceMain TYPO3 Core Engine parent object, not used
      */
-    public function processDatamap_afterDatabaseOperations(
-        $status,
-        $table,
-        $uid,
-        array $fields,
-        /** @noinspection PhpUnusedParameterInspection */
-        DataHandler $tceMain
-    ) {
-        if ($status == 'new') {
+    public function processDatamap_afterDatabaseOperations($status, $table, $uid, array $fields, DataHandler $tceMain)
+    {
+        if ($status === 'new') {
             // a newly created record, skip
             return;
         }
@@ -363,9 +229,7 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
             return;
         }
 
-        $garbageCollectionRelevantFields = $this->tcaService->getVisibilityAffectingFieldsByTable($table);
-
-        $record = (array)BackendUtility::getRecord($table, $uid, $garbageCollectionRelevantFields, '', false);
+        $record = $this->getRecordWithFieldRelevantForGarbageCollection($table, $uid);
 
         // If no record could be found skip further processing
         if (empty($record)) {
@@ -373,18 +237,15 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
         }
 
         $record = $this->tcaService->normalizeFrontendGroupField($table, $record);
+        $isGarbage = $this->getIsGarbageRecord($table, $record);
+        if (!$isGarbage) {
+            return;
+        }
 
-        if ($this->tcaService->isHidden($table, $record)
-            || $this->isInvisibleByStartOrEndtime($table, $record)
-            || $this->hasFrontendGroupsRemoved($table, $record)
-            || ($table == 'pages' && $this->isPageExcludedFromSearch($record))
-            || ($table == 'pages' && !$this->isIndexablePageType($record))
-        ) {
-            $this->collectGarbage($table, $uid);
+        $this->collectGarbage($table, $uid);
 
-            if ($table == 'pages') {
-                $this->deleteSubpagesWhenExtendToSubpagesIsSet($table, $uid, $fields);
-            }
+        if ($table === 'pages') {
+            $this->deleteSubpagesWhenExtendToSubpagesIsSet($table, $uid, $fields);
         }
     }
 
@@ -416,7 +277,7 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      */
     protected function isRelatedQueueRecordMarkedAsIndexed($table, $record)
     {
-        if ($table == 'tt_content' || $table == 'pages_language_overlay') {
+        if ($table === 'tt_content') {
             $table = 'pages';
             $uid = $record['pid'];
         } else {
@@ -445,22 +306,17 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
      */
     protected function hasFrontendGroupsRemoved($table, $record)
     {
-        $frontendGroupsRemoved = false;
-
-        if (isset($GLOBALS['TCA'][$table]['ctrl']['enablecolumns']['fe_group'])) {
-            $frontendGroupsField = $GLOBALS['TCA'][$table]['ctrl']['enablecolumns']['fe_group'];
-
-            $previousGroups = explode(',',
-                (string)$this->trackedRecords[$table][$record['uid']][$frontendGroupsField]);
-            $currentGroups = explode(',',
-                (string)$record[$frontendGroupsField]);
-
-            $removedGroups = array_diff($previousGroups, $currentGroups);
-
-            $frontendGroupsRemoved = (boolean)count($removedGroups);
+        if (!isset($GLOBALS['TCA'][$table]['ctrl']['enablecolumns']['fe_group'])) {
+            return false;
         }
 
-        return $frontendGroupsRemoved;
+        $frontendGroupsField = $GLOBALS['TCA'][$table]['ctrl']['enablecolumns']['fe_group'];
+
+        $previousGroups = explode(',', (string)$this->trackedRecords[$table][$record['uid']][$frontendGroupsField]);
+        $currentGroups = explode(',', (string)$record[$frontendGroupsField]);
+        $removedGroups = array_diff($previousGroups, $currentGroups);
+
+        return (boolean)count($removedGroups);
     }
 
     /**
@@ -487,21 +343,32 @@ class GarbageCollector extends AbstractDataHandlerListener implements SingletonI
     }
 
     /**
-     * Cleans an index from garbage entries.
+     * Determines if a record is garbage and can be deleted.
      *
-     * Was used to clean the index from expired documents/past endtime. Solr 4.8
-     * introduced DocExpirationUpdateProcessor to do that job by itself.
-     *
-     * The method remains as a dummy for possible later cleanups and to prevent
-     * things from breaking if others were using it.
-     *
-     * @deprecated since 6.0 will be removed in 7.0. deletion is done by DocExpirationUpdateProcessor
-     * @param Site $site The site to clean indexes on
-     * @param bool $commitAfterCleanUp Whether to commit right after the clean up, defaults to TRUE
-     * @return void
+     * @param string $table
+     * @param array $record
+     * @return bool
      */
-    public function cleanIndex(Site $site, $commitAfterCleanUp = true)
+    protected function getIsGarbageRecord($table, $record):bool
     {
-        GeneralUtility::logDeprecatedFunction();
+        return $this->tcaService->isHidden($table, $record) ||
+                $this->isInvisibleByStartOrEndtime($table, $record) ||
+                $this->hasFrontendGroupsRemoved($table, $record) ||
+                ($table === 'pages' && $this->isPageExcludedFromSearch($record)) ||
+                ($table === 'pages' && !$this->isIndexablePageType($record));
+    }
+
+    /**
+     * Returns a record with all visibility affecting fields.
+     *
+     * @param string $table
+     * @param int $uid
+     * @return array
+     */
+    protected function getRecordWithFieldRelevantForGarbageCollection($table, $uid):array
+    {
+        $garbageCollectionRelevantFields = $this->tcaService->getVisibilityAffectingFieldsByTable($table);
+        $record = (array)BackendUtility::getRecord($table, $uid, $garbageCollectionRelevantFields, '', false);
+        return $record;
     }
 }

@@ -1,4 +1,4 @@
-FROM solr:6.3.0
+FROM solr:7.6.0
 MAINTAINER Timo Hund <timo.hund@dkd.de>
 ENV TERM linux
 
@@ -8,7 +8,8 @@ COPY Resources/Private/Solr/ /opt/solr/server/solr
 
 USER root
 
-RUN chown -R solr:solr /opt/solr/server/solr/
+RUN mkdir -p /opt/solr/server/solr/data && \
+    chown -R solr:solr /opt/solr/server/solr/
 
 USER solr
 

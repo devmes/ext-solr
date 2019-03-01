@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Site;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,10 +26,14 @@ namespace ApacheSolrForTypo3\Solr\Domain\Site;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Domain\Index\Queue\RecordMonitor\Helper\RootPageResolver;
-use ApacheSolrForTypo3\Solr\Site;
 use ApacheSolrForTypo3\Solr\System\Cache\TwoLevelCache;
+use ApacheSolrForTypo3\Solr\System\Records\Pages\PagesRepository;
+use ApacheSolrForTypo3\Solr\System\Service\SiteService;
+use ApacheSolrForTypo3\Solr\Util;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * SiteRepository
@@ -66,20 +70,21 @@ class SiteRepository
      */
     public function __construct(RootPageResolver $rootPageResolver = null, TwoLevelCache $twoLevelCache = null, Registry $registry = null)
     {
-        $this->rootPageResolver = isset($rootPageResolver) ? $rootPageResolver : GeneralUtility::makeInstance(RootPageResolver::class);
-        $this->runtimeCache = isset($twoLevelCache) ? $twoLevelCache : GeneralUtility::makeInstance(TwoLevelCache::class, 'cache_runtime');
-        $this->registry = isset($registry) ? $registry : GeneralUtility::makeInstance(Registry::class);
+        $this->rootPageResolver = $rootPageResolver ?? GeneralUtility::makeInstance(RootPageResolver::class);
+        $this->runtimeCache = $twoLevelCache ?? GeneralUtility::makeInstance(TwoLevelCache::class, /** @scrutinizer ignore-type */ 'cache_runtime');
+        $this->registry = $registry ?? GeneralUtility::makeInstance(Registry::class);
     }
 
     /**
      * Gets the Site for a specific page Id.
      *
      * @param int $pageId The page Id to get a Site object for.
+     * @param string $mountPointIdentifier
      * @return Site Site for the given page Id.
      */
-    public function getSiteByPageId($pageId)
+    public function getSiteByPageId($pageId, $mountPointIdentifier = '')
     {
-        $rootPageId = $this->rootPageResolver->getRootPageId($pageId);
+        $rootPageId = $this->rootPageResolver->getRootPageId($pageId, false, $mountPointIdentifier);
         return $this->getSiteByRootPageId($rootPageId);
     }
 
@@ -180,11 +185,48 @@ class SiteRepository
      * Creates an instance of the Site object.
      *
      * @param integer $rootPageId
+     * @throws \InvalidArgumentException
      * @return Site
      */
     protected function buildSite($rootPageId)
     {
-        return GeneralUtility::makeInstance(Site::class, $rootPageId);
+        $rootPageRecord = (array)BackendUtility::getRecord('pages', $rootPageId);
+
+        $this->validateRootPageRecord($rootPageId, $rootPageRecord);
+        $solrConfiguration = Util::getSolrConfigurationFromPageId($rootPageId);
+        $domain = $this->getDomainFromConfigurationOrFallbackToDomainRecord($rootPageId);
+        $siteHash = $this->getSiteHashForDomain($domain);
+        $defaultLanguage = $this->getDefaultLanguage($rootPageId);
+        $pageRepository = GeneralUtility::makeInstance(PagesRepository::class);
+
+        return GeneralUtility::makeInstance(
+            Site::class,
+            /** @scrutinizer ignore-type */ $solrConfiguration,
+            /** @scrutinizer ignore-type */ $rootPageRecord,
+            /** @scrutinizer ignore-type */ $domain,
+            /** @scrutinizer ignore-type */ $siteHash,
+            /** @scrutinizer ignore-type */ $pageRepository,
+            /** @scrutinizer ignore-type */ $defaultLanguage
+        );
+    }
+
+    /**
+     * Retrieves the default language by the rootPageId of a site.
+     *
+     * @param int $rootPageId
+     * @return int|mixed
+     */
+    protected function getDefaultLanguage($rootPageId)
+    {
+        $siteDefaultLanguage = 0;
+
+        $configuration = Util::getConfigurationFromPageId($rootPageId, 'config');
+
+        $siteDefaultLanguage = $configuration->getValueByPathOrDefaultValue('sys_language_uid', $siteDefaultLanguage);
+        // default language is set through default L GET parameter -> overruling config.sys_language_uid
+        $siteDefaultLanguage = $configuration->getValueByPathOrDefaultValue('defaultGetVars.L', $siteDefaultLanguage);
+
+        return $siteDefaultLanguage;
     }
 
     /**
@@ -196,5 +238,58 @@ class SiteRepository
     {
         $servers = (array)$this->registry->get('tx_solr', 'servers', []);
         return $servers;
+    }
+
+    /**
+     * @param $rootPageId
+     * @return NULL|string
+     */
+    protected function getDomainFromConfigurationOrFallbackToDomainRecord($rootPageId)
+    {
+            /** @var $siteService SiteService */
+        $siteService = GeneralUtility::makeInstance(SiteService::class);
+        $domain = $siteService->getFirstDomainForRootPage($rootPageId);
+        if ($domain === '') {
+            $pageSelect = GeneralUtility::makeInstance(PageRepository::class);
+            $rootLine = $pageSelect->getRootLine($rootPageId);
+            $domain = BackendUtility::firstDomainRecord($rootLine);
+            return (string)$domain;
+        }
+
+        return $domain;
+    }
+
+    /**
+     * @param string $domain
+     * @return string
+     */
+    protected function getSiteHashForDomain($domain)
+    {
+        /** @var $siteHashService SiteHashService */
+        $siteHashService = GeneralUtility::makeInstance(SiteHashService::class);
+        $siteHash = $siteHashService->getSiteHashForDomain($domain);
+        return $siteHash;
+    }
+
+    /**
+     * @param int $rootPageId
+     * @param array $rootPageRecord
+     * @throws \InvalidArgumentException
+     */
+    protected function validateRootPageRecord($rootPageId, $rootPageRecord)
+    {
+        if (empty($rootPageRecord)) {
+            throw new \InvalidArgumentException(
+                'The rootPageRecord for the given rootPageRecord ID \'' . $rootPageId . '\' could not be found in the database and can therefore not be used as site root rootPageRecord.',
+                1487326416
+            );
+        }
+
+        if (!Site::isRootPage($rootPageRecord)) {
+            throw new \InvalidArgumentException(
+                'The rootPageRecord for the given rootPageRecord ID \'' . $rootPageId . '\' is not marked as root rootPageRecord and can therefore not be used as site root rootPageRecord.',
+                1309272922
+            );
+        }
     }
 }

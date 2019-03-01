@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,9 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Report;
 
 use ApacheSolrForTypo3\Solr\ConnectionManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\View\StandaloneView;
 use TYPO3\CMS\Reports\Status;
-use TYPO3\CMS\Reports\StatusProviderInterface;
 
 /**
  * Provides a status report about which solrconfig version is used and checks
@@ -50,7 +48,7 @@ class SolrConfigStatus extends AbstractSolrStatus
      *
      * @var string
      */
-    const RECOMMENDED_SOLRCONFIG_VERSION = 'tx_solr-6-1-0--20161220';
+    const RECOMMENDED_SOLRCONFIG_VERSION = 'tx_solr-9-0-0--20180727';
 
     /**
      * Compiles a collection of solrconfig version checks against each configured
@@ -64,10 +62,18 @@ class SolrConfigStatus extends AbstractSolrStatus
         $solrConnections = GeneralUtility::makeInstance(ConnectionManager::class)->getAllConnections();
 
         foreach ($solrConnections as $solrConnection) {
-            if ($solrConnection->ping() && $solrConnection->getSolrconfigName() != self::RECOMMENDED_SOLRCONFIG_VERSION) {
-                $variables = ['solr' => $solrConnection, 'recommendedVersion' => self::RECOMMENDED_SOLRCONFIG_VERSION];
+            $adminService = $solrConnection->getAdminService();
+
+            if ($adminService->ping() && $adminService->getSolrconfigName() != self::RECOMMENDED_SOLRCONFIG_VERSION) {
+                $variables = ['solr' => $adminService, 'recommendedVersion' => self::RECOMMENDED_SOLRCONFIG_VERSION];
                 $report = $this->getRenderedReport('SolrConfigStatus.html', $variables);
-                $status = GeneralUtility::makeInstance(Status::class, 'Solrconfig Version', 'Unsupported solrconfig.xml', $report, Status::WARNING);
+                $status = GeneralUtility::makeInstance(
+                    Status::class,
+                    /** @scrutinizer ignore-type */ 'Solrconfig Version',
+                    /** @scrutinizer ignore-type */ 'Unsupported solrconfig.xml',
+                    /** @scrutinizer ignore-type */ $report,
+                    /** @scrutinizer ignore-type */ Status::WARNING
+                );
 
                 $reports[] = $status;
             }

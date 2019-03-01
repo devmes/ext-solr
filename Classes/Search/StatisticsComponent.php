@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -24,17 +24,33 @@ namespace ApacheSolrForTypo3\Solr\Search;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-use ApacheSolrForTypo3\Solr\Response\Processor\StatisticsWriter;
+use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequest;
+use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequestAware;
+use ApacheSolrForTypo3\Solr\Domain\Search\Statistics\StatisticsWriterProcessor;
 use ApacheSolrForTypo3\Solr\Query\Modifier\Statistics;
-use ApacheSolrForTypo3\Solr\Util;
 
 /**
  * Statistics search component
  *
  * @author Ingo Renner <ingo@typo3.org>
  */
-class StatisticsComponent extends AbstractComponent
+class StatisticsComponent extends AbstractComponent implements SearchRequestAware
 {
+
+    /**
+     * @var SearchRequest
+     */
+    protected $seachRequest;
+
+    /**
+     * Provides a component that is aware of the current SearchRequest
+     *
+     * @param SearchRequest $searchRequest
+     */
+    public function setSearchRequest(SearchRequest $searchRequest)
+    {
+        $this->seachRequest = $searchRequest;
+    }
 
     /**
      * Initializes the search component.
@@ -42,14 +58,15 @@ class StatisticsComponent extends AbstractComponent
      */
     public function initializeSearchComponent()
     {
-        $solrConfiguration = Util::getSolrConfiguration();
+        $solrConfiguration = $this->seachRequest->getContextTypoScriptConfiguration();
 
         if ($solrConfiguration->getStatistics()) {
-            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['processSearchResponse']['statistics'] = StatisticsWriter::class;
+            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['afterSearch']['statistics'] = StatisticsWriterProcessor::class;
             // Only if addDebugData is enabled add Query modifier
             if ($solrConfiguration->getStatisticsAddDebugData()) {
                 $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['modifySearchQuery']['statistics'] = Statistics::class;
             }
         }
     }
+
 }

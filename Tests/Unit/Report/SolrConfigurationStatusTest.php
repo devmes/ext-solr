@@ -1,5 +1,5 @@
 <?php
-namespace ApacheSolrForTypo3\Solr\Test\Report;
+namespace ApacheSolrForTypo3\Solr\Tests\Unit\Report;
 
 /***************************************************************
  *  Copyright notice
@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Test\Report;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,6 +25,7 @@ namespace ApacheSolrForTypo3\Solr\Test\Report;
  ***************************************************************/
 
 use ApacheSolrForTypo3\Solr\Report\SolrConfigurationStatus;
+use ApacheSolrForTypo3\Solr\System\Records\SystemDomain\SystemDomainRepository;
 use ApacheSolrForTypo3\Solr\Tests\Unit\UnitTest;
 use TYPO3\CMS\Reports\Status;
 
@@ -42,9 +43,17 @@ class SolrConfigurationStatusTest extends UnitTest
      */
     protected $report;
 
+    /**
+     * @var SystemDomainRepository
+     */
+    protected $systemDomainRepository;
 
     public function setUp() {
         // we mock the methods to external dependencies.
+        $this->systemDomainRepository = $this->getMockBuilder(SystemDomainRepository::class)->setMethods(
+            ['findDomainRecordsByRootPagesIds']
+        )->getMock();
+
         $this->report = $this->getMockBuilder(SolrConfigurationStatus::class)->setMethods(
             [
                 'getDomainRecordsForRootPagesIds',
@@ -53,6 +62,9 @@ class SolrConfigurationStatusTest extends UnitTest
                 'getIsIndexingEnabled',
                 'initializeTSFE',
                 'getRenderedReport'
+            ]
+        )->setConstructorArgs([
+                'systemDomainRepository' => $this->systemDomainRepository
             ]
         )->getMock();
     }
@@ -69,6 +81,8 @@ class SolrConfigurationStatusTest extends UnitTest
 
         $this->report->expects($this->any())->method('getIsSolrEnabled')->will($this->returnValue(false));
         $this->report->expects($this->any())->method('getIsIndexingEnabled')->will($this->returnValue(false));
+
+        $this->systemDomainRepository->expects($this->any())->method('findDomainRecordsByRootPagesIds')->will($this->returnValue($fakedDomainRecords));
 
         // everything should be ok, so no report should be rendered
         $this->report->expects($this->never())->method('getRenderedReport');
@@ -94,6 +108,8 @@ class SolrConfigurationStatusTest extends UnitTest
             'SolrConfigurationStatusIndexing.html',
             ['pages' => [$fakedRootPages[1]]]
         )->will($this->returnValue('faked report output'));
+
+        $this->systemDomainRepository->expects($this->any())->method('findDomainRecordsByRootPagesIds')->will($this->returnValue($fakedDomainRecords));
 
         $states = $this->report->getStatus();
 

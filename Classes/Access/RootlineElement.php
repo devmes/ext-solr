@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Access;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -96,7 +96,7 @@ class RootlineElement
     {
         $elementAccess = explode(self::PAGE_ID_GROUP_DELIMITER, $element);
 
-        if (count($elementAccess) === 1 || $elementAccess[0] == 'c') {
+        if (count($elementAccess) === 1 || $elementAccess[0] === 'c') {
             // the content access groups part of the access rootline
             $this->type = self::ELEMENT_TYPE_CONTENT;
 
@@ -105,7 +105,7 @@ class RootlineElement
             } else {
                 $elementGroups = $elementAccess[1];
             }
-        } elseif ($elementAccess[0] == 'r') {
+        } elseif ($elementAccess[0] === 'r') {
             // record element type
             if (count($elementAccess) !== 2) {
                 throw new RootlineElementFormatException(

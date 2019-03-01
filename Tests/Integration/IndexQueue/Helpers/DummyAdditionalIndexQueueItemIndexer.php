@@ -1,5 +1,4 @@
 <?php
-
 namespace ApacheSolrForTypo3\Solr\Tests\Integration\IndexQueue\Helpers;
 
 /***************************************************************
@@ -11,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\IndexQueue\Helpers;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -27,6 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration\IndexQueue\Helpers;
 
 use ApacheSolrForTypo3\Solr\IndexQueue\AdditionalIndexQueueItemIndexer;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
 
 /**
  * Class DummyAdditionalIndexQueueItemIndexer for testing purpose
@@ -39,15 +39,11 @@ class DummyAdditionalIndexQueueItemIndexer implements AdditionalIndexQueueItemIn
      *
      * @param Item $item The item currently being indexed.
      * @param int $language The language uid of the documents
-     * @param \Apache_Solr_Document $itemDocument The original item document.
+     * @param Document $itemDocument The original item document.
      *
-     * @return array An array of additional Apache_Solr_Document objects
+     * @return Document[] An array of additional Apache Solr Document objects
      */
-    public function getAdditionalItemDocuments(
-        Item $item,
-        $language,
-        \Apache_Solr_Document $itemDocument
-    ) {
+    public function getAdditionalItemDocuments(Item $item, $language, Document $itemDocument) {
         return [];
     }
 }

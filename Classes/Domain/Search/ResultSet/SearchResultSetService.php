@@ -11,7 +11,7 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\ResultSet;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,20 +25,28 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\ResultSet;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\QueryFields;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\QueryBuilder;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\Query;
+use ApacheSolrForTypo3\Solr\Domain\Search\Query\SearchQuery;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\Parser\ResultParserRegistry;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\SearchResult;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\SearchResultCollection;
 use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequest;
-use ApacheSolrForTypo3\Solr\Plugin\PluginAware;
-use ApacheSolrForTypo3\Solr\Query;
-use ApacheSolrForTypo3\Solr\Response\Processor\ResponseProcessor;
+use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequestAware;
+use ApacheSolrForTypo3\Solr\Domain\Variants\VariantsProcessor;
+use ApacheSolrForTypo3\Solr\Query\Modifier\Modifier;
 use ApacheSolrForTypo3\Solr\Search;
 use ApacheSolrForTypo3\Solr\Search\QueryAware;
+use ApacheSolrForTypo3\Solr\Search\SearchAware;
 use ApacheSolrForTypo3\Solr\Search\SearchComponentManager;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
-use TYPO3\CMS\Core\SingletonInterface;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
+use ApacheSolrForTypo3\Solr\System\Solr\ResponseAdapter;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrIncompleteResponseException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
-use TYPO3\CMS\Frontend\Plugin\AbstractPlugin;
-use Apache_Solr_ParserException;
+use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\SearchResultBuilder;
 
 /**
  * The SearchResultSetService is responsible to build a SearchResultSet from a SearchRequest.
@@ -46,15 +54,8 @@ use Apache_Solr_ParserException;
  *
  * @author Timo Schmidt <timo.schmidt@dkd.de>
  */
-class SearchResultSetService implements SingletonInterface
+class SearchResultSetService
 {
-    /**
-     * Additional filters, which will be added to the query, as well as to
-     * suggest queries.
-     *
-     * @var array
-     */
-    protected $additionalFilters = [];
 
     /**
      * Track, if the number of results per page has been changed by the current request
@@ -64,7 +65,7 @@ class SearchResultSetService implements SingletonInterface
     protected $resultsPerPageChanged = false;
 
     /**
-     * @var \ApacheSolrForTypo3\Solr\Search
+     * @var Search
      */
     protected $search;
 
@@ -74,22 +75,7 @@ class SearchResultSetService implements SingletonInterface
     protected $lastResultSet = null;
 
     /**
-     * @var AbstractPlugin
-     */
-    protected $parentPlugin;
-
-    /**
-     * @var bool
-     */
-    protected $useQueryAwareComponents = true;
-
-    /**
-     * @var bool
-     */
-    protected $usePluginAwareComponents = true;
-
-    /**
-     * @var
+     * @var boolean
      */
     protected $isSolrAvailable = false;
 
@@ -99,29 +85,34 @@ class SearchResultSetService implements SingletonInterface
     protected $typoScriptConfiguration;
 
     /**
-     * @var \ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
+     * @var SolrLogManager;
      */
     protected $logger = null;
 
     /**
-     * @param TypoScriptConfiguration $configuration
-     * @param Search $search
-     * @param AbstractPlugin $parentPlugin (optional parent plugin, needed for plugin aware components)
+     * @var SearchResultBuilder
      */
-    public function __construct(TypoScriptConfiguration $configuration, Search $search, AbstractPlugin $parentPlugin = null)
-    {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
-        $this->search = $search;
-        $this->typoScriptConfiguration = $configuration;
-        $this->parentPlugin = $parentPlugin;
-    }
+    protected $searchResultBuilder;
 
     /**
-     * @return AbstractPlugin
+     * @var QueryBuilder
      */
-    public function getParentPlugin()
+    protected $queryBuilder;
+
+    /**
+     * @param TypoScriptConfiguration $configuration
+     * @param Search $search
+     * @param SolrLogManager $solrLogManager
+     * @param SearchResultBuilder $resultBuilder
+     * @param QueryBuilder $queryBuilder
+     */
+    public function __construct(TypoScriptConfiguration $configuration, Search $search, SolrLogManager $solrLogManager = null, SearchResultBuilder $resultBuilder = null, QueryBuilder $queryBuilder = null)
     {
-        return $this->parentPlugin;
+        $this->search = $search;
+        $this->typoScriptConfiguration = $configuration;
+        $this->logger = $solrLogManager ?? GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
+        $this->searchResultBuilder = $resultBuilder ?? GeneralUtility::makeInstance(SearchResultBuilder::class);
+        $this->queryBuilder = $queryBuilder ?? GeneralUtility::makeInstance(QueryBuilder::class, /** @scrutinizer ignore-type */ $configuration, /** @scrutinizer ignore-type */ $solrLogManager);
     }
 
     /**
@@ -135,14 +126,6 @@ class SearchResultSetService implements SingletonInterface
     }
 
     /**
-     * @return bool
-     */
-    public function getHasSearched()
-    {
-        return $this->search->hasSearched();
-    }
-
-    /**
      * Retrieves the used search instance.
      *
      * @return Search
@@ -153,87 +136,10 @@ class SearchResultSetService implements SingletonInterface
     }
 
     /**
-     * @param bool $usePluginAwareComponents
-     */
-    public function setUsePluginAwareComponents($usePluginAwareComponents)
-    {
-        $this->usePluginAwareComponents = $usePluginAwareComponents;
-    }
-
-    /**
-     * @return bool
-     */
-    public function getUsePluginAwareComponents()
-    {
-        return $this->usePluginAwareComponents;
-    }
-
-    /**
-     * @param bool $useQueryAwareComponents
-     */
-    public function setUseQueryAwareComponents($useQueryAwareComponents)
-    {
-        $this->useQueryAwareComponents = $useQueryAwareComponents;
-    }
-
-    /**
-     * @return bool
-     */
-    public function getUseQueryAwareComponents()
-    {
-        return $this->useQueryAwareComponents;
-    }
-
-    /**
-     * Initializes the Query object and SearchComponents and returns
-     * the initialized query object, when a search should be executed.
-     *
-     * @param string $rawQuery
-     * @param int $resultsPerPage
-     * @return Query
-     */
-    protected function getPreparedQuery($rawQuery, $resultsPerPage)
-    {
-        /* @var $query Query */
-        $query = GeneralUtility::makeInstance(Query::class, $rawQuery);
-
-        $this->applyPageSectionsRootLineFilter($query);
-
-        if ($this->typoScriptConfiguration->getLoggingQuerySearchWords()) {
-            $this->logger->log(
-                SolrLogManager::INFO,
-                'Received search query',
-                [
-                    $rawQuery
-                ]
-            );
-        }
-
-        $query->setResultsPerPage($resultsPerPage);
-
-        $this->initializeRegisteredSearchComponents($query);
-
-        if ($this->typoScriptConfiguration->getSearchInitializeWithEmptyQuery() || $this->typoScriptConfiguration->getSearchQueryAllowEmptyQuery()) {
-            // empty main query, but using a "return everything"
-            // alternative query in q.alt
-            $query->setAlternativeQuery('*:*');
-        }
-
-        if ($this->typoScriptConfiguration->getSearchInitializeWithQuery()) {
-            $query->setAlternativeQuery($this->typoScriptConfiguration->getSearchInitializeWithQuery());
-        }
-
-        foreach ($this->getAdditionalFilters() as $additionalFilter) {
-            $query->addFilter($additionalFilter);
-        }
-
-        return $query;
-    }
-
-    /**
      * @param Query $query
+     * @param SearchRequest $searchRequest
      */
-    protected function initializeRegisteredSearchComponents(Query $query)
+    protected function initializeRegisteredSearchComponents(Query $query, SearchRequest $searchRequest)
     {
         $searchComponents = $this->getRegisteredSearchComponents();
 
@@ -241,201 +147,16 @@ class SearchResultSetService implements SingletonInterface
             /** @var Search\SearchComponent $searchComponent */
             $searchComponent->setSearchConfiguration($this->typoScriptConfiguration->getSearchConfiguration());
 
-            if ($searchComponent instanceof QueryAware && $this->useQueryAwareComponents) {
+            if ($searchComponent instanceof QueryAware) {
                 $searchComponent->setQuery($query);
             }
 
-            if ($searchComponent instanceof PluginAware && $this->usePluginAwareComponents) {
-                $searchComponent->setParentPlugin($this->parentPlugin);
+            if ($searchComponent instanceof SearchRequestAware) {
+                $searchComponent->setSearchRequest($searchRequest);
             }
 
             $searchComponent->initializeSearchComponent();
         }
-    }
-
-    /**
-     * Returns the number of results per Page.
-     *
-     * Also influences how many result documents are returned by the Solr
-     * server as the return value is used in the Solr "rows" GET parameter.
-     *
-     * @param string $rawQuery
-     * @param int|null $requestedPerPage
-     * @return int number of results to show per page
-     */
-    protected function getNumberOfResultsPerPage($rawQuery, $requestedPerPage = null)
-    {
-        $perPageSwitchOptions = $this->typoScriptConfiguration->getSearchResultsPerPageSwitchOptionsAsArray();
-        if (isset($requestedPerPage) && in_array($requestedPerPage, $perPageSwitchOptions)) {
-            $this->setPerPageInSession($requestedPerPage);
-            $this->resultsPerPageChanged = true;
-        }
-
-        $defaultResultsPerPage = $this->typoScriptConfiguration->getSearchResultsPerPage();
-        $sessionResultPerPage = $this->getPerPageFromSession();
-
-        $currentNumberOfResultsShown = $defaultResultsPerPage;
-        if (!is_null($sessionResultPerPage) && in_array($sessionResultPerPage, $perPageSwitchOptions)) {
-            $currentNumberOfResultsShown = (int)$sessionResultPerPage;
-        }
-
-        if ($this->shouldHideResultsFromInitialSearch($rawQuery)) {
-            // initialize search with an empty query, which would by default return all documents
-            // anyway, tell Solr to not return any result documents
-            // Solr will still return facets though
-            $currentNumberOfResultsShown = 0;
-        }
-
-        return $currentNumberOfResultsShown;
-    }
-
-    /**
-     * Provides a hook for other classes to process the search's response.
-     *
-     * @param string $rawQuery
-     * @param Query $query The query that has been searched for.
-     * @param \Apache_Solr_Response $response The search's response.
-     */
-    protected function processResponse($rawQuery, Query $query, \Apache_Solr_Response &$response)
-    {
-        if ($this->shouldHideResultsFromInitialSearch($rawQuery)) {
-            // explicitly set number of results to 0 as we just wanted
-            // facets and the like according to configuration
-            // @see getNumberOfResultsPerPage()
-            $response->response->numFound = 0;
-        }
-
-        $this->wrapResultDocumentInResultObject($response);
-        $this->addExpandedDocumentsFromVariants($response);
-
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['processSearchResponse'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['processSearchResponse'] as $classReference) {
-                $responseProcessor = GeneralUtility::getUserObj($classReference);
-                if ($responseProcessor instanceof ResponseProcessor) {
-                    $responseProcessor->processResponse($query, $response);
-                }
-            }
-        }
-    }
-
-    /**
-     * This method is used to add documents to the expanded documents of the SearchResult
-     * when collapsing is configured.
-     *
-     * @param \Apache_Solr_Response $response
-     */
-    protected function addExpandedDocumentsFromVariants(\Apache_Solr_Response &$response)
-    {
-        if (!is_array($response->response->docs)) {
-            return;
-        }
-
-        if (!$this->typoScriptConfiguration->getSearchVariants()) {
-            return;
-        }
-
-        $variantsField = $this->typoScriptConfiguration->getSearchVariantsField();
-        foreach ($response->response->docs as $key => $resultDocument) {
-            /** @var $resultDocument SearchResult */
-            $variantField = $resultDocument->getField($variantsField);
-            $variantId = isset($variantField['value']) ? $variantField['value'] : null;
-
-                // when there is no value in the collapsing field, we can return
-            if ($variantId === null) {
-                continue;
-            }
-
-            $variantAccessKey = strtolower($variantId);
-            if (!isset($response->{'expanded'}) || !isset($response->{'expanded'}->{$variantAccessKey})) {
-                continue;
-            }
-
-            foreach ($response->{'expanded'}->{$variantAccessKey}->{'docs'} as $variantDocumentArray) {
-                $variantDocument = new \Apache_Solr_Document();
-                foreach (get_object_vars($variantDocumentArray) as $propertyName => $propertyValue) {
-                    $variantDocument->{$propertyName} = $propertyValue;
-                }
-                $variantSearchResult = $this->wrapApacheSolrDocumentInResultObject($variantDocument);
-                $variantSearchResult->setIsVariant(true);
-                $variantSearchResult->setVariantParent($resultDocument);
-
-                $resultDocument->addVariant($variantSearchResult);
-            }
-        }
-    }
-
-    /**
-     * Wrap all results document it a custom EXT:solr SearchResult object.
-     *
-     * Can be overwritten:
-     *
-     * $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName '] = ''
-     *
-     * to use a custom result object.
-     *
-     * @param \Apache_Solr_Response $response
-     * @throws \Apache_Solr_ParserException
-     */
-    protected function wrapResultDocumentInResultObject(\Apache_Solr_Response &$response)
-    {
-        try {
-            $documents = $response->response->docs;
-        } catch (Apache_Solr_ParserException $e) {
-            // when variant are enable and the index is empty, we get a parse exception, because of a
-            // Apache Solr Bug.
-            // see: https://github.com/TYPO3-Solr/ext-solr/issues/668
-            // @todo this try/catch block can be removed after upgrading to Apache Solr 6.4
-            if (!$this->typoScriptConfiguration->getSearchVariants()) {
-                throw $e;
-            }
-
-            $response->response = new \stdClass();
-            $response->spellcheck = [];
-            $response->debug = [];
-            $response->responseHeader = [];
-            $response->facet_counts = [];
-
-            $documents = [];
-        }
-
-        if (!is_array($documents)) {
-            return;
-        }
-
-        foreach ($documents as $key => $originalDocument) {
-            $result = $this->wrapApacheSolrDocumentInResultObject($originalDocument);
-            $documents[$key] = $result;
-        }
-
-        $response->response->docs = $documents;
-    }
-
-    /**
-     * This method is used to wrap the \Apache_Solr_Document instance in an instance of the configured SearchResult
-     * class.
-     *
-     * @param \Apache_Solr_Document $originalDocument
-     * @throws \InvalidArgumentException
-     * @return SearchResult
-     */
-    protected function wrapApacheSolrDocumentInResultObject(\Apache_Solr_Document $originalDocument)
-    {
-        $searchResultClassName = $this->getResultClassName();
-        $result = GeneralUtility::makeInstance($searchResultClassName, $originalDocument);
-        if (!$result instanceof SearchResult) {
-            throw new \InvalidArgumentException('Could not create result object with class: ' . (string)$searchResultClassName, 1470037679);
-        }
-
-        return $result;
-    }
-
-    /**
-     * @return string
-     */
-    protected function getResultClassName()
-    {
-        return isset($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName ']) ?
-            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['searchResultClassName '] : SearchResult::class;
     }
 
     /**
@@ -448,80 +169,6 @@ class SearchResultSetService implements SingletonInterface
     }
 
     /**
-     * Checks it the results should be hidden in the response.
-     *
-     * @param string $rawQuery
-     * @return bool
-     */
-    protected function shouldHideResultsFromInitialSearch($rawQuery)
-    {
-        return ($this->typoScriptConfiguration->getSearchInitializeWithEmptyQuery() || $this->typoScriptConfiguration->getSearchInitializeWithQuery()) && !$this->typoScriptConfiguration->getSearchShowResultsOfInitialEmptyQuery() && !$this->typoScriptConfiguration->getSearchShowResultsOfInitialQuery() && $rawQuery === null;
-    }
-
-    /**
-     * Initializes additional filters configured through TypoScript and
-     * Flexforms for use in regular queries and suggest queries.
-     *
-     * @param Query $query
-     * @return void
-     */
-    protected function applyPageSectionsRootLineFilter(Query $query)
-    {
-        $searchQueryFilters = $this->typoScriptConfiguration->getSearchQueryFilterConfiguration();
-        if (count($searchQueryFilters) <= 0) {
-            return;
-        }
-
-        // special filter to limit search to specific page tree branches
-        if (array_key_exists('__pageSections', $searchQueryFilters)) {
-            $query->setRootlineFilter($searchQueryFilters['__pageSections']);
-            $this->typoScriptConfiguration->removeSearchQueryFilterForPageSections();
-        }
-    }
-
-    /**
-     * Retrieves the configuration filters from the TypoScript configuration, except the __pageSections filter.
-     *
-     * @return array
-     */
-    public function getAdditionalFilters()
-    {
-        // when we've build the additionalFilter once, we could return them
-        if (count($this->additionalFilters) > 0) {
-            return $this->additionalFilters;
-        }
-
-        $searchQueryFilters = $this->typoScriptConfiguration->getSearchQueryFilterConfiguration();
-        if (count($searchQueryFilters) <= 0) {
-            return [];
-        }
-
-        $cObj = GeneralUtility::makeInstance(ContentObjectRenderer::class);
-
-        // all other regular filters
-        foreach ($searchQueryFilters as $filterKey => $filter) {
-            // the __pageSections filter should not be handled as additional filter
-            if ($filterKey === '__pageSections') {
-                continue;
-            }
-
-            $filterIsArray = is_array($searchQueryFilters[$filterKey]);
-            if ($filterIsArray) {
-                continue;
-            }
-
-            $hasSubConfiguration = is_array($searchQueryFilters[$filterKey . '.']);
-            if ($hasSubConfiguration) {
-                $filter = $cObj->stdWrap($searchQueryFilters[$filterKey], $searchQueryFilters[$filterKey . '.']);
-            }
-
-            $this->additionalFilters[$filterKey] = $filter;
-        }
-
-        return $this->additionalFilters;
-    }
-
-    /**
      * Performs a search and returns a SearchResultSet.
      *
      * @param SearchRequest $searchRequest
@@ -529,50 +176,224 @@ class SearchResultSetService implements SingletonInterface
      */
     public function search(SearchRequest $searchRequest)
     {
-        /** @var $resultSet SearchResultSet */
-        $resultSetClass = $this->getResultSetClassName();
-        $resultSet = GeneralUtility::makeInstance($resultSetClass);
-        $resultSet->setUsedSearchRequest($searchRequest);
+        $resultSet = $this->getInitializedSearchResultSet($searchRequest);
         $this->lastResultSet = $resultSet;
 
         $resultSet = $this->handleSearchHook('beforeSearch', $resultSet);
+        if ($this->shouldReturnEmptyResultSetWithoutExecutedSearch($searchRequest)) {
+            $resultSet->setHasSearched(false);
+            return $resultSet;
+        }
 
+        $query = $this->queryBuilder->buildSearchQuery($searchRequest->getRawUserQuery(), (int)$searchRequest->getResultsPerPage(), $searchRequest->getAdditionalFilters());
+        $this->initializeRegisteredSearchComponents($query, $searchRequest);
+        $resultSet->setUsedQuery($query);
+
+        // performing the actual search, sending the query to the Solr server
+        $query = $this->modifyQuery($query, $searchRequest, $this->search);
+        $response = $this->doASearch($query, $searchRequest);
+
+        if ((int)$searchRequest->getResultsPerPage() === 0) {
+            // when resultPerPage was forced to 0 we also set the numFound to 0 to hide results, e.g.
+            // when results for the initial search should not be shown.
+            $response->response->numFound = 0;
+        }
+
+        $resultSet->setHasSearched(true);
+        $resultSet->setResponse($response);
+
+        $this->getParsedSearchResults($resultSet);
+
+        $resultSet->setUsedAdditionalFilters($this->queryBuilder->getAdditionalFilters());
+
+        /** @var $variantsProcessor VariantsProcessor */
+        $variantsProcessor = GeneralUtility::makeInstance(
+            VariantsProcessor::class,
+            /** @scrutinizer ignore-type */ $this->typoScriptConfiguration,
+            /** @scrutinizer ignore-type */ $this->searchResultBuilder
+        );
+        $variantsProcessor->process($resultSet);
+
+        /** @var $searchResultReconstitutionProcessor ResultSetReconstitutionProcessor */
+        $searchResultReconstitutionProcessor = GeneralUtility::makeInstance(ResultSetReconstitutionProcessor::class);
+        $searchResultReconstitutionProcessor->process($resultSet);
+
+        $resultSet = $this->getAutoCorrection($resultSet);
+
+        return $this->handleSearchHook('afterSearch', $resultSet);
+    }
+
+    /**
+     * Uses the configured parser and retrieves the parsed search resutls.
+     *
+     * @param SearchResultSet $resultSet
+     */
+    protected function getParsedSearchResults($resultSet)
+    {
+        /** @var ResultParserRegistry $parserRegistry */
+        $parserRegistry = GeneralUtility::makeInstance(ResultParserRegistry::class, /** @scrutinizer ignore-type */ $this->typoScriptConfiguration);
+        $useRawDocuments = (bool)$this->typoScriptConfiguration->getValueByPathOrDefaultValue('plugin.tx_solr.features.useRawDocuments', false);
+        $parserRegistry->getParser($resultSet)->parse($resultSet, $useRawDocuments);
+    }
+
+    /**
+     * Evaluates conditions on the request and configuration and returns true if no search should be triggered and an empty
+     * SearchResultSet should be returned.
+     *
+     * @param SearchRequest $searchRequest
+     * @return bool
+     */
+    protected function shouldReturnEmptyResultSetWithoutExecutedSearch(SearchRequest $searchRequest)
+    {
         if ($searchRequest->getRawUserQueryIsNull() && !$this->getInitialSearchIsConfigured()) {
             // when no rawQuery was passed or no initialSearch is configured, we pass an empty result set
-            return $resultSet;
+            return true;
         }
 
         if ($searchRequest->getRawUserQueryIsEmptyString() && !$this->typoScriptConfiguration->getSearchQueryAllowEmptyQuery()) {
             // the user entered an empty query string "" or "  " and empty querystring is not allowed
-            return $resultSet;
+            return true;
         }
 
-        $rawQuery = $searchRequest->getRawUserQuery();
-        $resultsPerPage = $this->getNumberOfResultsPerPage($rawQuery, $searchRequest->getResultsPerPage());
-        $query = $this->getPreparedQuery($rawQuery, $resultsPerPage);
+        return false;
+    }
 
-        $resultSet->setUsedQuery($query);
+    /**
+     * Initializes the SearchResultSet from the SearchRequest
+     *
+     * @param SearchRequest $searchRequest
+     * @return SearchResultSet
+     */
+    protected function getInitializedSearchResultSet(SearchRequest $searchRequest):SearchResultSet
+    {
+        /** @var $resultSet SearchResultSet */
+        $resultSetClass = $this->getResultSetClassName();
+        $resultSet = GeneralUtility::makeInstance($resultSetClass);
 
-        $currentPage = max(0, $searchRequest->getPage());
-        // if the number of results per page has been changed by the current request, reset the pagebrowser
-        if ($this->resultsPerPageChanged) {
-            $currentPage = 0;
-        }
-
-        $offSet = $currentPage * $resultsPerPage;
-        // performing the actual search, sending the query to the Solr server
-        $response = $this->search->search($query, $offSet, null);
-
-        $this->processResponse($rawQuery, $query, $response);
-        $this->addSearchResultsToResultSet($response, $resultSet);
-
-        $resultSet->setResponse($response);
-        $resultSet->setUsedPage($currentPage);
-        $resultSet->setUsedResultsPerPage($resultsPerPage);
-        $resultSet->setUsedAdditionalFilters($this->getAdditionalFilters());
+        $resultSet->setUsedSearchRequest($searchRequest);
+        $resultSet->setUsedPage((int)$searchRequest->getPage());
+        $resultSet->setUsedResultsPerPage((int)$searchRequest->getResultsPerPage());
         $resultSet->setUsedSearch($this->search);
+        return $resultSet;
+    }
 
-        return $this->handleSearchHook('afterSearch', $resultSet);
+    /**
+     * Executes the search and builds a fake response for a current bug in Apache Solr 6.3
+     *
+     * @param Query $query
+     * @param SearchRequest $searchRequest
+     * @return ResponseAdapter
+     */
+    protected function doASearch($query, $searchRequest): ResponseAdapter
+    {
+        // the offset mulitplier is page - 1 but not less then zero
+        $offsetMultiplier = max(0, $searchRequest->getPage() - 1);
+        $offSet = $offsetMultiplier * (int)$searchRequest->getResultsPerPage();
+
+        $response = $this->search->search($query, $offSet, null);
+        if($response === null) {
+            throw new SolrIncompleteResponseException('The response retrieved from solr was incomplete', 1505989678);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param SearchResultSet $searchResultSet
+     * @return SearchResultSet
+     */
+    protected function getAutoCorrection(SearchResultSet $searchResultSet)
+    {
+        // no secondary search configured
+        if (!$this->typoScriptConfiguration->getSearchSpellcheckingSearchUsingSpellCheckerSuggestion()) {
+            return $searchResultSet;
+        }
+
+        // more then zero results
+        if ($searchResultSet->getAllResultCount() > 0) {
+            return $searchResultSet;
+        }
+
+        // no corrections present
+        if (!$searchResultSet->getHasSpellCheckingSuggestions()) {
+            return $searchResultSet;
+        }
+
+        $searchResultSet = $this->peformAutoCorrection($searchResultSet);
+
+        return $searchResultSet;
+    }
+
+    /**
+     * @param SearchResultSet $searchResultSet
+     * @return SearchResultSet
+     */
+    protected function peformAutoCorrection(SearchResultSet $searchResultSet)
+    {
+        $searchRequest = $searchResultSet->getUsedSearchRequest();
+        $suggestions = $searchResultSet->getSpellCheckingSuggestions();
+
+        $maximumRuns = $this->typoScriptConfiguration->getSearchSpellcheckingNumberOfSuggestionsToTry(1);
+        $runs = 0;
+
+        foreach ($suggestions as $suggestion) {
+            $runs++;
+
+            $correction = $suggestion->getSuggestion();
+            $initialQuery = $searchRequest->getRawUserQuery();
+
+            $searchRequest->setRawQueryString($correction);
+            $searchResultSet = $this->search($searchRequest);
+            if ($searchResultSet->getAllResultCount() > 0) {
+                $searchResultSet->setIsAutoCorrected(true);
+                $searchResultSet->setCorrectedQueryString($correction);
+                $searchResultSet->setInitialQueryString($initialQuery);
+                break;
+            }
+
+            if ($runs > $maximumRuns) {
+                break;
+            }
+        }
+        return $searchResultSet;
+    }
+
+    /**
+     * Allows to modify a query before eventually handing it over to Solr.
+     *
+     * @param Query $query The current query before it's being handed over to Solr.
+     * @param SearchRequest $searchRequest The searchRequest, relevant in the current context
+     * @param Search $search The search, relevant in the current context
+     * @throws \UnexpectedValueException
+     * @return Query The modified query that is actually going to be given to Solr.
+     */
+    protected function modifyQuery(Query $query, SearchRequest $searchRequest, Search $search)
+    {
+        // hook to modify the search query
+        if (is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['modifySearchQuery'])) {
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['modifySearchQuery'] as $classReference) {
+                $queryModifier = GeneralUtility::makeInstance($classReference);
+
+                if ($queryModifier instanceof Modifier) {
+                    if ($queryModifier instanceof SearchAware) {
+                        $queryModifier->setSearch($search);
+                    }
+
+                    if ($queryModifier instanceof SearchRequestAware) {
+                        $queryModifier->setSearchRequest($searchRequest);
+                    }
+
+                    $query = $queryModifier->modifyQuery($query);
+                } else {
+                    throw new \UnexpectedValueException(
+                        get_class($queryModifier) . ' must implement interface ' . Modifier::class,
+                        1310387414
+                    );
+                }
+            }
+        }
+
+        return $query;
     }
 
     /**
@@ -583,15 +404,17 @@ class SearchResultSetService implements SingletonInterface
      */
     public function getDocumentById($documentId)
     {
-        /* @var $query Query */
-        $query = GeneralUtility::makeInstance(Query::class, $documentId);
-        $query->setQueryFieldsFromString('id');
-
+        /* @var $query SearchQuery */
+        $query = $this->queryBuilder->newSearchQuery($documentId)->useQueryFields(QueryFields::fromString('id'))->getQuery();
         $response = $this->search->search($query, 0, 1);
-        $this->processResponse($documentId, $query, $response);
+        $parsedData = $response->getParsedData();
+        $resultDocument = isset($parsedData->response->docs[0]) ? $parsedData->response->docs[0] : null;
 
-        $resultDocument = isset($response->response->docs[0]) ? $response->response->docs[0] : null;
-        return $resultDocument;
+        if (!$resultDocument instanceof Document) {
+            throw new \UnexpectedValueException("Response did not contain a valid Document object");
+        }
+
+        return $this->searchResultBuilder->fromApacheSolrDocument($resultDocument);
     }
 
     /**
@@ -608,7 +431,7 @@ class SearchResultSetService implements SingletonInterface
         }
 
         foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr'][$eventName] as $classReference) {
-            $afterSearchProcessor = GeneralUtility::getUserObj($classReference);
+            $afterSearchProcessor = GeneralUtility::makeInstance($classReference);
             if ($afterSearchProcessor instanceof SearchResultSetProcessor) {
                 $afterSearchProcessor->process($resultSet);
             }
@@ -642,22 +465,6 @@ class SearchResultSetService implements SingletonInterface
     }
 
     /**
-     * @param int $requestedPerPage
-     */
-    protected function setPerPageInSession($requestedPerPage)
-    {
-        $GLOBALS['TSFE']->fe_user->setKey('ses', 'tx_solr_resultsPerPage', intval($requestedPerPage));
-    }
-
-    /**
-     * @return mixed
-     */
-    protected function getPerPageFromSession()
-    {
-        return $GLOBALS['TSFE']->fe_user->getKey('ses', 'tx_solr_resultsPerPage');
-    }
-
-    /**
      * @return bool
      */
     protected function getInitialSearchIsConfigured()
@@ -671,22 +478,5 @@ class SearchResultSetService implements SingletonInterface
     protected function getRegisteredSearchComponents()
     {
         return GeneralUtility::makeInstance(SearchComponentManager::class)->getSearchComponents();
-    }
-
-    /**
-     * This method is used to reference the SearchResult object from the response in the SearchResultSet object.
-     *
-     * @param \Apache_Solr_Response $response
-     * @param SearchResultSet $resultSet
-     */
-    protected function addSearchResultsToResultSet($response, $resultSet)
-    {
-        if (!is_array($response->response->docs)) {
-            return;
-        }
-
-        foreach ($response->response->docs as $searchResult) {
-            $resultSet->addSearchResult($searchResult);
-        }
     }
 }

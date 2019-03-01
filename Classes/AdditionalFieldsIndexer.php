@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -25,6 +25,7 @@ namespace ApacheSolrForTypo3\Solr;
  ***************************************************************/
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\ContentObject\ContentObjectService;
+use ApacheSolrForTypo3\Solr\System\Solr\Document\Document;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -69,7 +70,7 @@ class AdditionalFieldsIndexer implements SubstitutePageIndexer
         $this->configuration = $configuration === null ? Util::getSolrConfiguration() : $configuration;
         $this->additionalIndexingFields = $this->configuration->getIndexAdditionalFieldsConfiguration();
         $this->additionalFieldNames = $this->configuration->getIndexMappedAdditionalFieldNames();
-        $this->contentObjectService = $contentObjectService === null ? GeneralUtility::makeInstance(ContentObjectService::class, $GLOBALS['TSFE']->cObj) : $contentObjectService;
+        $this->contentObjectService = $contentObjectService === null ? GeneralUtility::makeInstance(ContentObjectService::class, /** @scrutinizer ignore-type */ $GLOBALS['TSFE']->cObj) : $contentObjectService;
     }
 
     /**
@@ -78,10 +79,10 @@ class AdditionalFieldsIndexer implements SubstitutePageIndexer
      * Uses the original document and adds fields as defined in
      * plugin.tx_solr.index.additionalFields.
      *
-     * @param \Apache_Solr_Document $pageDocument The original page document.
-     * @return \Apache_Solr_Document A Apache_Solr_Document object that replace the default page document
+     * @param Document $pageDocument The original page document.
+     * @return Document A Apache Solr Document object that replace the default page document
      */
-    public function getPageDocument(\Apache_Solr_Document $pageDocument)
+    public function getPageDocument(Document $pageDocument)
     {
         $substitutePageDocument = clone $pageDocument;
         $additionalFields = $this->getAdditionalFields();

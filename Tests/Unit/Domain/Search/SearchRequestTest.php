@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\Domain\Search;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -72,7 +72,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canGetActiveFilterNames()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertEquals(['type'], $request->getActiveFacetNames());
     }
@@ -82,7 +82,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canGetRawQueryString()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertEquals('typo3', $request->getRawUserQuery());
     }
@@ -94,7 +94,7 @@ class SearchRequestTest extends UnitTest
     {
         $request = $this->getSearchRequestFromQueryString('');
         $data  = $request->setRawQueryString('foobar')->getAsArray();
-        $this->assertEquals(['q' => 'foobar'], $data, 'The argument container did not contain the expected argument');
+        $this->assertEquals(['tx_solr' => ['q' => 'foobar']], $data, 'The argument container did not contain the expected argument');
     }
 
     /**
@@ -132,7 +132,7 @@ class SearchRequestTest extends UnitTest
         $arguments  = $request->setRawQueryString('mysearch')->addFacetValue('type', 'tt_content')->getAsArray();
 
         $expectedArguments = [];
-        $expectedArguments['q'] = 'mysearch';
+        $expectedArguments['tx_solr']['q'] = 'mysearch';
         $expectedArguments['tx_solr']['filter'][0] = 'type:tt_content';
 
         $this->assertSame($arguments, $expectedArguments, 'Could not set a query and add a facet at the same time');
@@ -163,7 +163,7 @@ class SearchRequestTest extends UnitTest
                             ->getAsArray();
 
         $expectedArguments = [];
-        $expectedArguments['q'] = 'mysearch';
+        $expectedArguments['tx_solr']['q'] = 'mysearch';
         $expectedArguments['tx_solr']['filter'][0] = 'type:tt_content';
 
         $this->assertSame($arguments, $expectedArguments, 'Could not reset arguments');
@@ -183,7 +183,7 @@ class SearchRequestTest extends UnitTest
                                 ->getCopyForSubRequest()->getAsArray();
 
         $expectedArguments = [];
-        $expectedArguments['q'] = 'mysearch';
+        $expectedArguments['tx_solr']['q'] = 'mysearch';
         $expectedArguments['tx_solr']['filter'][0] = 'type:tt_content';
 
         $this->assertSame($arguments, $expectedArguments);
@@ -212,7 +212,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canRemoveFacetValue()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages';
         $request = $this->getSearchRequestFromQueryString($query);
 
         $this->assertTrue($request->getHasFacetValue('type', 'pages'), 'Facet was not present');
@@ -225,7 +225,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canGetFacetValues()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Anews';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Anews';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertEquals(['pages', 'news'], $request->getActiveFacetValuesByName('type'));
     }
@@ -235,7 +235,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canRemoveAllFacets()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Aevents';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Aevents';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertSame(2, $request->getActiveFacetCount(), 'Expected to have two active facets');
         $request->removeAllFacets();
@@ -247,7 +247,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canRemoveFacetsByName()
     {
-        $query = 'q=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Aevents&tx_solr%5Bfilter%5D%5B2%5D=created%253A1-4';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bfilter%5D%5B0%5D=type%253Apages&tx_solr%5Bfilter%5D%5B1%5D=type%253Aevents&tx_solr%5Bfilter%5D%5B2%5D=created%253A1-4';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertSame(3, $request->getActiveFacetCount(), 'Expected to have two active facets');
         $request->removeAllFacetValuesByName('type');
@@ -259,7 +259,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canGetSortingField()
     {
-        $query = 'q=typo3&tx_solr%5Bsort%5D=title asc';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bsort%5D=title asc';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertTrue($request->getHasSorting(), 'Passed query has no sorting');
         $this->assertSame('title', $request->getSortingName(), 'Expected sorting name was title');
@@ -271,7 +271,7 @@ class SearchRequestTest extends UnitTest
      */
     public function canRemoveSorting()
     {
-        $query = 'q=typo3&tx_solr%5Bsort%5D=title asc';
+        $query = 'tx_solr%5Bq%5D=typo3&tx_solr%5Bsort%5D=title asc';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertTrue($request->getHasSorting(), 'Passed query has no sorting');
         $this->assertSame('title', $request->getSortingName(), 'Expected sorting name was title');
@@ -290,12 +290,72 @@ class SearchRequestTest extends UnitTest
      */
     public function canSetSorting()
     {
-        $query = 'q=typo3';
+        $query = 'tx_solr%5Bq%5D=typo3';
         $request = $this->getSearchRequestFromQueryString($query);
         $this->assertFalse($request->getHasSorting(), 'Passed query has no sorting');
 
         $request->setSorting('auther', 'desc');
         $this->assertTrue($request->getHasSorting(), 'Passed query has no sorting');
+    }
+
+    /**
+     * @test
+     */
+    public function canGetHighestGroupItemPageWhenNoPageWasPassed()
+    {
+        $request = $this->getSearchRequestFromQueryString('');
+        $this->assertSame(1, $request->getHighestGroupPage(), 'Can not get highest group item page when no group page was passed');
+    }
+
+    /**
+     * @test
+     */
+    public function canGetInitialGroupItemPage()
+    {
+        $request = $this->getSearchRequestFromQueryString('');
+        $this->assertSame(1, $request->getGroupItemPage('typeGroup', 'pages'), 'Can not get initial group item page');
+    }
+
+    /**
+     * @test
+     */
+    public function canSetGroupItemPage()
+    {
+        $query = 'tx_solr%5Bq%5D=typo3';
+        $request = $this->getSearchRequestFromQueryString($query);
+        $request->setGroupItemPage('typeGroup', 'pages', 2);
+
+        $this->assertSame(2, $request->getGroupItemPage('typeGroup', 'pages'), 'Can not set and get groupItemPage');
+    }
+
+    /**
+     * @test
+     */
+    public function canSetGroupItemPageForQuery()
+    {
+        $query = 'tx_solr%5Bq%5D=typo3';
+        $request = $this->getSearchRequestFromQueryString($query);
+        $request->setGroupItemPage('pidGroup', 'pid:[0 to 5]', 3);
+
+        $this->assertSame(3, $request->getGroupItemPage('pidGroup', 'pid:[0 to 5]'), 'Can not set and get groupItemPage for a query');
+    }
+
+    /**
+     * @test
+     */
+    public function canResetAllGroupItemPages()
+    {
+        $query = 'tx_solr%5Bq%5D=typo3';
+        $request = $this->getSearchRequestFromQueryString($query);
+        $request->setGroupItemPage('typeGroup', 'pages', 2);
+        $request->setGroupItemPage('colorGroup', 'colors', 4);
+
+        $requestArguments = $request->getAsArray();
+        $this->assertCount(2, $requestArguments['tx_solr']['groupPage'], 'Expected to have two group pages registered');
+
+        $request->removeAllGroupItemPages();
+        $requestArguments = $request->getAsArray();
+        $this->assertNull($requestArguments['tx_solr']['groupPage'], 'Expected to have two group pages registered');
     }
 
     /**

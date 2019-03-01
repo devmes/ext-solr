@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue\FrontendHelper;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -28,8 +28,8 @@ use ApacheSolrForTypo3\Solr\Access\Rootline;
 use ApacheSolrForTypo3\Solr\ConnectionManager;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
-use ApacheSolrForTypo3\Solr\SolrService;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
+use ApacheSolrForTypo3\Solr\System\Solr\SolrConnection;
 use ApacheSolrForTypo3\Solr\Typo3PageIndexer;
 use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\SingletonInterface;
@@ -81,8 +81,8 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
     {
         $pageIndexingHookRegistration = PageIndexer::class;
 
-        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['initFEuser'][__CLASS__] = '&' . $pageIndexingHookRegistration . '->authorizeFrontendUser';
-        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['tslib_fe-PostProc'][__CLASS__] = '&' . $pageIndexingHookRegistration . '->disableCaching';
+        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['initFEuser'][__CLASS__] = $pageIndexingHookRegistration . '->authorizeFrontendUser';
+        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['tslib_fe-PostProc'][__CLASS__] = $pageIndexingHookRegistration . '->disableCaching';
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['pageIndexing'][__CLASS__] = $pageIndexingHookRegistration;
 
         // indexes fields defined in plugin.tx_solr.index.queue.pages.fields
@@ -156,7 +156,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
             $stringAccessRootline = $this->request->getParameter('accessRootline');
         }
 
-        $accessRootline = GeneralUtility::makeInstance(Rootline::class, $stringAccessRootline);
+        $accessRootline = GeneralUtility::makeInstance(Rootline::class, /** @scrutinizer ignore-type */ $stringAccessRootline);
         return $accessRootline;
     }
 
@@ -263,7 +263,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
      */
     public function hook_indexContent(TypoScriptFrontendController $page)
     {
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, /** @scrutinizer ignore-type */ __CLASS__);
 
         $this->page = $page;
         $configuration = Util::getSolrConfiguration();
@@ -288,7 +288,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
             $solrConnection = $this->getSolrConnection($indexQueueItem);
 
             /** @var $indexer Typo3PageIndexer */
-            $indexer = GeneralUtility::makeInstance(Typo3PageIndexer::class, $page);
+            $indexer = GeneralUtility::makeInstance(Typo3PageIndexer::class, /** @scrutinizer ignore-type */ $page);
             $indexer->setSolrConnection($solrConnection);
             $indexer->setPageAccessRootline($this->getAccessRootline());
             $indexer->setPageUrl($this->generatePageUrl());
@@ -300,7 +300,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
             $this->responseData['solrConnection'] = [
                 'rootPage' => $indexQueueItem->getRootPageUid(),
                 'sys_language_uid' => $GLOBALS['TSFE']->sys_language_uid,
-                'solr' => (string)$solrConnection
+                'solr' => (string)$solrConnection->getNode('write')
             ];
 
             $documentsSentToSolr = $indexer->getDocumentsSentToSolr();
@@ -336,7 +336,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
      * Index Queue item's properties.
      *
      * @param Item $indexQueueItem
-     * @return SolrService Solr server connection
+     * @return SolrConnection Solr server connection
      */
     protected function getSolrConnection(Item $indexQueueItem)
     {

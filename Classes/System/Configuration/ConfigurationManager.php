@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\System\Configuration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -100,11 +100,15 @@ class ConfigurationManager implements SingletonInterface
      * This method is used to build the TypoScriptConfiguration.
      *
      * @param array $configurationArray
-     * @param null $contextPageId
+     * @param int|null $contextPageId
      * @return object
      */
     protected function getTypoScriptConfigurationInstance(array $configurationArray = null, $contextPageId = null)
     {
-        return GeneralUtility::makeInstance(TypoScriptConfiguration::class, $configurationArray, $contextPageId);
+        return GeneralUtility::makeInstance(
+            TypoScriptConfiguration::class,
+            /** @scrutinizer ignore-type */ $configurationArray,
+            /** @scrutinizer ignore-type */ $contextPageId
+        );
     }
 }

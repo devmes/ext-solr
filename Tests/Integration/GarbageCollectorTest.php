@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -26,10 +26,14 @@ namespace ApacheSolrForTypo3\Solr\Tests\Integration;
 
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
 use ApacheSolrForTypo3\Solr\GarbageCollector;
+use ApacheSolrForTypo3\Solr\IndexQueue\Indexer;
+use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\RecordMonitor;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Charset\CharsetConverter;
+use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * This testcase is used to check if the GarbageCollector can delete garbage from the
@@ -60,6 +64,11 @@ class GarbageCollectorTest extends IntegrationTest
      */
     protected $garbageCollector;
 
+    /**
+     * @var Indexer
+     */
+    protected $indexer;
+
     public function setUp()
     {
         parent::setUp();
@@ -67,6 +76,7 @@ class GarbageCollectorTest extends IntegrationTest
         $this->dataHandler = GeneralUtility::makeInstance(DataHandler::class);
         $this->indexQueue = GeneralUtility::makeInstance(Queue::class);
         $this->garbageCollector = GeneralUtility::makeInstance(GarbageCollector::class);
+        $this->indexer = GeneralUtility::makeInstance(Indexer::class);
     }
 
     /**
@@ -100,9 +110,6 @@ class GarbageCollectorTest extends IntegrationTest
      */
     public function canQueueAPageAndRemoveItWithTheGarbageCollector()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('can_queue_a_page_and_remove_it_with_the_garbage_collector.xml');
 
         // we expect that the index queue is empty before we start
@@ -125,9 +132,6 @@ class GarbageCollectorTest extends IntegrationTest
      */
     public function canCollectGarbageFromSubPagesWhenPageIsSetToHiddenAndExtendToSubPagesIsSet()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('can_collect_garbage_from_subPages_when_page_is_set_to_hidden_and_extendToSubpages_is_set.xml');
 
         // we expect that the index queue is empty before we start
@@ -141,7 +145,9 @@ class GarbageCollectorTest extends IntegrationTest
         $this->assertIndexQueryContainsItemAmount(3);
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=1', ['hidden' => 1]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 1], ['hidden' => 1]);
+
         $changeSet = ['hidden' => 1];
 
         $dataHandler = $this->dataHandler;
@@ -157,9 +163,6 @@ class GarbageCollectorTest extends IntegrationTest
      */
     public function canCollectGarbageFromSubPagesWhenPageIsSetToHiddenAndExtendToSubPagesIsSetForMultipleSubpages()
     {
-        /** @var $database  \TYPO3\CMS\Core\Database\DatabaseConnection */
-        $database = $GLOBALS['TYPO3_DB'];
-        $database->debugOutput = true;
         $this->importDataSetFromFixture('can_collect_garbage_from_subPages_when_page_is_set_to_hidden_and_extendToSubpages_is_set_multiple_subpages.xml');
 
         // we expect that the index queue is empty before we start
@@ -174,7 +177,8 @@ class GarbageCollectorTest extends IntegrationTest
         $this->assertIndexQueryContainsItemAmount(4);
 
         // simulate the database change and build a faked changeset
-        $database->exec_UPDATEquery('pages', 'uid=1', ['hidden' => 1]);
+        $connection = $this->getDatabaseConnection();
+        $connection->updateArray('pages', ['uid' => 1], ['hidden' => 1]);
         $changeSet = ['hidden' => 1];
 
         $dataHandler = $this->dataHandler;
@@ -220,7 +224,8 @@ class GarbageCollectorTest extends IntegrationTest
         $items = $this->indexQueue->getItems('pages', 1);
 
         // we index this item
-        $this->indexPageIds($items);
+        $itemIds = $this->getItemPageIds($items);
+        $this->indexPageIds($itemIds);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
@@ -268,8 +273,10 @@ class GarbageCollectorTest extends IntegrationTest
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
 
+        $itemIds = $this->getItemPageIds($items);
+
         // we index this item
-        $this->indexPageIds($items);
+        $this->indexPageIds($itemIds);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
@@ -320,8 +327,9 @@ class GarbageCollectorTest extends IntegrationTest
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
 
+        $itemIds = $this->getItemPageIds($items);
         // we index this item
-        $this->indexPageIds($items);
+        $this->indexPageIds($itemIds);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
@@ -373,7 +381,8 @@ class GarbageCollectorTest extends IntegrationTest
         $items = $this->indexQueue->getItems('pages', 1);
 
         // we index this item
-        $this->indexPageIds($items);
+        $itemIds = $this->getItemPageIds($items);
+        $this->indexPageIds($itemIds);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
@@ -424,7 +433,8 @@ class GarbageCollectorTest extends IntegrationTest
         $items = $this->indexQueue->getItems('pages', 1);
 
         // we index this item
-        $this->indexPageIds($items);
+        $itemIds = $this->getItemPageIds($items);
+        $this->indexPageIds($itemIds);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
@@ -536,5 +546,89 @@ class GarbageCollectorTest extends IntegrationTest
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove content from deleted page');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('"numFound":1', $solrContent, 'Expected to have two documents in the index');
+    }
+
+    /**
+     * @test
+     */
+    public function canTriggerHookAfterRecordDeletion()
+    {
+        $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['postProcessGarbageCollector'][] = TestGarbageCollectorPostProcessor::class;
+
+        $this->importExtTablesDefinition('fake_extension_table.sql');
+        $GLOBALS['TCA']['tx_fakeextension_domain_model_foo'] = include($this->getFixturePathByName('fake_extension_tca.php'));
+        $this->importDataSetFromFixture('can_delete_custom_record.xml');
+
+        $this->cleanUpSolrServerAndAssertEmpty();
+        $this->fakeLanguageService();
+
+        // we hide the seconde page
+        $beUser = $this->fakeBEUser(1, 0);
+
+        $this->addToQueueAndIndexRecord('tx_fakeextension_domain_model_foo', 111);
+        $this->waitToBeVisibleInSolr();
+        $this->assertSolrContainsDocumentCount(1);
+
+        $cmd['tx_fakeextension_domain_model_foo'][111]['delete'] = 1;
+        $this->dataHandler->start([], $cmd, $beUser);
+        $this->dataHandler->stripslashes_values = 0;
+        $this->dataHandler->process_cmdmap();
+        $this->dataHandler->process_datamap();
+        $this->dataHandler->clear_cacheCmd('all');
+
+        $this->waitToBeVisibleInSolr();
+        $this->assertSolrIsEmpty();
+
+            // since our hook is a singleton we check here if it was called.
+            /** @var TestGarbageCollectorPostProcessor $hook */
+        $hook = GeneralUtility::makeInstance(TestGarbageCollectorPostProcessor::class);
+        $this->assertTrue($hook->isHookWasCalled());
+
+            // reset the hooks
+        $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['solr']['postProcessGarbageCollector'] = [];
+    }
+
+    /**
+     * @param string $table
+     * @param int $uid
+     * @return ResponseAdapter
+     */
+    protected function addToQueueAndIndexRecord($table, $uid)
+    {
+        // write an index queue item
+        $this->indexQueue->updateItem($table, $uid);
+
+        // run the indexer
+        $items = $this->indexQueue->getItems($table, $uid);
+        foreach ($items as $item) {
+            $result = $this->indexer->index($item);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param $items
+     * @return array
+     */
+    protected function getItemPageIds($items):array
+    {
+        $itemIds = [];
+        foreach ($items as $item) {
+            /** @var $item Item */
+            $itemIds[] = $item->getRecordPageId();
+        }
+        return $itemIds;
+    }
+
+    /**
+     *
+     */
+    protected function fakeLanguageService()
+    {
+        /** @var $languageService  \TYPO3\CMS\Lang\LanguageService */
+        $languageService = GeneralUtility::makeInstance(LanguageService::class);
+        $languageService->csConvObj = GeneralUtility::makeInstance(CharsetConverter::class);
+        $GLOBALS['LANG'] = $languageService;
     }
 }

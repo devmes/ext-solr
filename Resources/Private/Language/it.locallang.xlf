@@ -57,6 +57,10 @@
 				<source>Found @resultsTotal results in @resultsTime milliseconds.</source>
 				<target>@resultsTotal risultati trovati in @resultsTime millisecondi.</target>
 			</trans-unit>
+			<trans-unit id="results_found.singular" xml:space="preserve" approved="yes">
+				<source>Found 1 result in @resultsTime milliseconds.</source>
+				<target>1 risultati trovati in @resultsTime millisecondi.</target>
+			</trans-unit>
 			<trans-unit id="results_searched_for" xml:space="preserve" approved="yes">
 				<source>Searched for &quot;@searchWord&quot;.</source>
 				<target>Eseguita ricerca di &quot;@searchWord&quot;.</target>
@@ -66,7 +70,7 @@
 				<target>La ricerca di &quot;@searchWord&quot; non ha prodotto risultati in nessun documento.</target>
 			</trans-unit>
 			<trans-unit id="no_results_showing_results_suggestion" xml:space="preserve" approved="yes">
-				<source>Showing results for &quot;@suggestedWord&quot;</source>
+				<source>Showing results for &quot;@suggestedWord&quot;.</source>
 				<target></target>
 			</trans-unit>
 			<trans-unit id="no_results_search_for_original" xml:space="preserve" approved="yes">

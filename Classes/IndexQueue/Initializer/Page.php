@@ -10,7 +10,7 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue\Initializer;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -27,12 +27,16 @@ namespace ApacheSolrForTypo3\Solr\IndexQueue\Initializer;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use ApacheSolrForTypo3\Solr\Domain\Index\Queue\QueueItemRepository;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
-use ApacheSolrForTypo3\Solr\Utility\DatabaseUtility;
+use ApacheSolrForTypo3\Solr\System\Records\Pages\PagesRepository;
+use Doctrine\DBAL\DBALException;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Database\Connection;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -45,20 +49,26 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class Page extends AbstractInitializer
 {
     /**
-     * @var \ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager
+     * The type of items this initializer is handling.
+     * @var string
      */
-    protected $logger = null;
+    protected $type = 'pages';
+
+    /**
+     * @var PagesRepository
+     */
+    protected $pagesRepository;
 
     /**
      * Constructor, sets type and indexingConfigurationName to "pages".
      *
+     * @param QueueItemRepository|null $queueItemRepository
+     * @param PagesRepository|null $pagesRepository
      */
-    public function __construct()
+    public function __construct(QueueItemRepository $queueItemRepository = null, PagesRepository $pagesRepository = null)
     {
-        parent::__construct();
-
-        $this->type = 'pages';
-        $this->logger = GeneralUtility::makeInstance(SolrLogManager::class, __CLASS__);
+        parent::__construct($queueItemRepository);
+        $this->pagesRepository = $pagesRepository ?? GeneralUtility::makeInstance(PagesRepository::class);
     }
 
     /**
@@ -110,19 +120,24 @@ class Page extends AbstractInitializer
     protected function initializeMountPages()
     {
         $mountPagesInitialized = false;
-        $mountPages = $this->findMountPages();
+        $mountPages = $this->pagesRepository->findAllMountPagesByWhereClause($this->buildPagesClause() . $this->buildTcaWhereClause() . ' AND doktype = 7 AND no_search = 0');
 
         if (empty($mountPages)) {
             $mountPagesInitialized = true;
             return $mountPagesInitialized;
         }
 
+        $databaseConnection = $this->queueItemRepository->getConnectionForAllInTransactionInvolvedTables(
+            'tx_solr_indexqueue_item',
+            'tx_solr_indexqueue_indexing_property'
+        );
+
         foreach ($mountPages as $mountPage) {
             if (!$this->validateMountPage($mountPage)) {
                 continue;
             }
 
-            $mountedPages = $this->resolveMountPageTree($mountPage['mountPageSource']);
+            $mountedPages = $this->resolveMountPageTree($mountPage);
 
             // handling mount_pid_ol behavior
             if ($mountPage['mountPageOverlayed']) {
@@ -141,15 +156,15 @@ class Page extends AbstractInitializer
                 continue;
             }
 
-            DatabaseUtility::transactionStart();
+            $databaseConnection->beginTransaction();
             try {
                 $this->addMountedPagesToIndexQueue($mountedPages, $mountPage);
                 $this->addIndexQueueItemIndexingProperties($mountPage, $mountedPages);
 
-                DatabaseUtility::transactionCommit();
+                $databaseConnection->commit();
                 $mountPagesInitialized = true;
             } catch (\Exception $e) {
-                DatabaseUtility::transactionRollback();
+                $databaseConnection->rollBack();
 
                 $this->logger->log(
                     SolrLogManager::ERROR,
@@ -235,7 +250,8 @@ class Page extends AbstractInitializer
      */
     protected function addMountedPagesToIndexQueue(array $mountedPages, array $mountProperties)
     {
-        $mountPointPageIsWithExistingQueueEntry = $this->getPageIdsOfExistingMountPages($mountedPages);
+        $mountPointIdentifier = $this->getMountPointIdentifier($mountProperties);
+        $mountPointPageIsWithExistingQueueEntry = $this->queueItemRepository->findPageIdsOfExistingMountPagesByMountIdentifier($mountPointIdentifier);
         $mountedPagesThatNeedToBeAdded = array_diff($mountedPages, $mountPointPageIsWithExistingQueueEntry);
 
         if (count($mountedPagesThatNeedToBeAdded) === 0) {
@@ -243,46 +259,26 @@ class Page extends AbstractInitializer
             return;
         }
 
+        /* @var Connection $connection */
+        $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_solr_indexqueue_item');
+
         $mountIdentifier = $this->getMountPointIdentifier($mountProperties);
         $initializationQuery = 'INSERT INTO tx_solr_indexqueue_item (root, item_type, item_uid, indexing_configuration, indexing_priority, changed, has_indexing_properties, pages_mountidentifier, errors) '
-            . $this->buildSelectStatement() . ', 1, ' . $GLOBALS['TYPO3_DB']->fullQuoteStr($mountIdentifier,
-                'tx_solr_indexqueue_item') . ',""'
+            . $this->buildSelectStatement() . ', 1, ' . $connection->quote($mountIdentifier, \PDO::PARAM_STR) . ',""'
             . 'FROM pages '
             . 'WHERE '
             . 'uid IN(' . implode(',', $mountedPagesThatNeedToBeAdded) . ') '
             . $this->buildTcaWhereClause()
             . $this->buildUserWhereClause();
+        $logData = ['query' => $initializationQuery];
 
-        $GLOBALS['TYPO3_DB']->sql_query($initializationQuery);
-        $this->logInitialization($initializationQuery);
-    }
-
-    /**
-     * Retrieves an array of pageIds from mountPoints that allready have a queue entry.
-     *
-     * @param array $mountedPages
-     * @return array
-     */
-    protected function getPageIdsOfExistingMountPages($mountedPages)
-    {
-        $queueItemsOfExistingMountPoints = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            'COUNT(*) AS queueItemCount,item_uid',
-            'tx_solr_indexqueue_item',
-            'item_type="pages" AND item_uid IN (' . implode(',', $mountedPages) . ')',
-            'item_uid',
-            '',
-            '',
-            'item_uid'
-        );
-
-        $mountedPagesIdsWithQueueItems = [];
-        foreach ($queueItemsOfExistingMountPoints as $id => $queueItemsOfExistingMountPoint) {
-            if (((int)$queueItemsOfExistingMountPoint['queueItemCount']) > 0) {
-                $mountedPagesIdsWithQueueItems[] = (int)$id;
-            }
+        try {
+            $logData['rows'] = $this->queueItemRepository->initializeByNativeSQLStatement($initializationQuery);
+        } catch (DBALException $DBALException) {
+            $logData['error'] = $DBALException->getCode() . ': ' . $DBALException->getMessage();
         }
 
-        return $mountedPagesIdsWithQueueItems;
+        $this->logInitialization($logData);
     }
 
     /**
@@ -297,23 +293,11 @@ class Page extends AbstractInitializer
     protected function addIndexQueueItemIndexingProperties(array $mountPage, array $mountedPages)
     {
         $mountIdentifier = $this->getMountPointIdentifier($mountPage);
-        $mountPageItems = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            '*',
-            'tx_solr_indexqueue_item',
-            'root = ' . intval($this->site->getRootPageId()) . ' '
-            . 'AND item_type = \'pages\' '
-            . 'AND item_uid IN(' . implode(',', $mountedPages) . ') '
-            . 'AND has_indexing_properties = 1 '
-            . 'AND pages_mountidentifier=' . $GLOBALS['TYPO3_DB']->fullQuoteStr($mountIdentifier,
-                'tx_solr_indexqueue_item')
-        );
-
-        if (!is_array($mountPageItems)) {
-            return;
-        }
+        $mountPageItems = $this->queueItemRepository->findAllIndexQueueItemsByRootPidAndMountIdentifierAndMountedPids($this->site->getRootPageId(), $mountIdentifier, $mountedPages);
 
         foreach ($mountPageItems as $mountPageItemRecord) {
-            $mountPageItem = GeneralUtility::makeInstance(Item::class, $mountPageItemRecord);
+            /* @var Item $mountPageItem */
+            $mountPageItem = GeneralUtility::makeInstance(Item::class, /** @scrutinizer ignore-type */ $mountPageItemRecord);
             $mountPageItem->setIndexingProperty('mountPageSource', $mountPage['mountPageSource']);
             $mountPageItem->setIndexingProperty('mountPageDestination', $mountPage['mountPageDestination']);
             $mountPageItem->setIndexingProperty('isMountedPage', '1');
@@ -326,47 +310,30 @@ class Page extends AbstractInitializer
      * Builds an identifier of the given mount point properties.
      *
      * @param array $mountProperties Array with mount point properties (mountPageSource, mountPageDestination, mountPageOverlayed)
-     * @return string String consisting of mountPageDestination-mountPageSource-mountPageOverlayed
+     * @return string String consisting of mountPageSource-mountPageDestination-mountPageOverlayed
      */
     protected function getMountPointIdentifier(array $mountProperties)
     {
-        return $mountProperties['mountPageDestination']
-        . '-' . $mountProperties['mountPageSource']
+        return $mountProperties['mountPageSource']
+        . '-' . $mountProperties['mountPageDestination']
         . '-' . $mountProperties['mountPageOverlayed'];
     }
 
     // Mount Page resolution
-
-    /**
-     * Finds the mount pages in the current site.
-     *
-     * @return array An array of mount pages
-     */
-    protected function findMountPages()
-    {
-        return $GLOBALS['TYPO3_DB']->exec_SELECTgetRows(
-            'uid,
-				\'1\'        as isMountPage,
-				mount_pid    as mountPageSource,
-				uid          as mountPageDestination,
-				mount_pid_ol as mountPageOverlayed',
-            'pages',
-            $this->buildPagesClause()
-            . $this->buildTcaWhereClause()
-            . ' AND doktype = 7 AND no_search = 0'
-        );
-    }
-
     /**
      * Gets all the pages from a mounted page tree.
      *
-     * @param int $mountPageSourceId
+     * @param array $mountPage
      * @return array An array of page IDs in the mounted page tree
      */
-    protected function resolveMountPageTree($mountPageSourceId)
+    protected function resolveMountPageTree($mountPage)
     {
+        $mountPageSourceId = $mountPage['mountPageSource'];
+        $mountPageIdentifier = $this->getMountPointIdentifier($mountPage);
+
         $siteRepository = GeneralUtility::makeInstance(SiteRepository::class);
-        $mountedSite = $siteRepository->getSiteByPageId($mountPageSourceId);
+        /* @var $siteRepository SiteRepository */
+        $mountedSite = $siteRepository->getSiteByPageId($mountPageSourceId, $mountPageIdentifier);
 
         return $mountedSite->getPages($mountPageSourceId);
     }

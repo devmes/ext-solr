@@ -12,7 +12,7 @@ namespace ApacheSolrForTypo3\Solr\Task;
  *  This script is part of the TYPO3 project. The TYPO3 project is
  *  free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
+ *  the Free Software Foundation; either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  The GNU General Public License can be found at
@@ -29,7 +29,7 @@ namespace ApacheSolrForTypo3\Solr\Task;
 use ApacheSolrForTypo3\Solr\Backend\IndexingConfigurationSelectorField;
 use ApacheSolrForTypo3\Solr\Backend\SiteSelectorField;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
-use ApacheSolrForTypo3\Solr\Site;
+use ApacheSolrForTypo3\Solr\Domain\Site\Site;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Scheduler\AdditionalFieldProviderInterface;
@@ -71,8 +71,6 @@ class ReIndexTaskAdditionalFieldProvider implements AdditionalFieldProviderInter
      * @var Site
      */
     protected $site = null;
-
-
     /**
      * SiteRepository
      *
@@ -94,7 +92,6 @@ class ReIndexTaskAdditionalFieldProvider implements AdditionalFieldProviderInter
     }
 
     /**
-     *
      * @param array $taskInfo
      * @param \TYPO3\CMS\Scheduler\Task\AbstractTask|NULL $task
      * @param \TYPO3\CMS\Scheduler\Controller\SchedulerModuleController $schedulerModule
@@ -104,12 +101,13 @@ class ReIndexTaskAdditionalFieldProvider implements AdditionalFieldProviderInter
         AbstractTask $task = null,
         SchedulerModuleController $schedulerModule
     ) {
+        /** @var $task ReIndexTask */
         $this->taskInformation = $taskInfo;
         $this->task = $task;
         $this->schedulerModule = $schedulerModule;
 
-        if ($schedulerModule->CMD == 'edit') {
-            $this->site = $task->getSite();
+        if ($schedulerModule->CMD === 'edit') {
+            $this->site = $this->siteRepository->getSiteByRootPageId($task->getRootPageId());
         }
     }
 
@@ -165,7 +163,7 @@ class ReIndexTaskAdditionalFieldProvider implements AdditionalFieldProviderInter
             return $selectorMarkup;
         }
 
-        $selectorField = GeneralUtility::makeInstance(IndexingConfigurationSelectorField::class, $this->site);
+        $selectorField = GeneralUtility::makeInstance(IndexingConfigurationSelectorField::class, /** @scrutinizer ignore-type */ $this->site);
 
         $selectorField->setFormElementName('tx_scheduler[indexingConfigurations]');
         $selectorField->setSelectedValues($this->task->getIndexingConfigurationsToReIndex());
@@ -209,11 +207,12 @@ class ReIndexTaskAdditionalFieldProvider implements AdditionalFieldProviderInter
         array $submittedData,
         AbstractTask $task
     ) {
+        /** @var $task ReIndexTask */
         if (!$this->isTaskInstanceofReIndexTask($task)) {
             return;
         }
 
-        $task->setSite($this->siteRepository->getSiteByRootPageId($submittedData['site']));
+        $task->setRootPageId($submittedData['site']);
 
         $indexingConfigurations = [];
         if (!empty($submittedData['indexingConfigurations'])) {
