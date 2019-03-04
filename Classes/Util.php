@@ -30,7 +30,7 @@ use ApacheSolrForTypo3\Solr\System\Configuration\ConfigurationManager;
 use ApacheSolrForTypo3\Solr\System\Configuration\ConfigurationPageResolver;
 use ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
-use ApacheSolrForTypo3\Solr\System\TCA\TCAService;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 use ApacheSolrForTypo3\Solr\System\Mvc\Frontend\Controller\OverriddenTypoScriptFrontendController;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
@@ -320,27 +320,31 @@ class Util
         if (!isset($tsfeCache[$cacheId]) || !$useCache) {
             GeneralUtility::_GETset($language, 'L');
 
-
             $GLOBALS['TSFE'] = GeneralUtility::makeInstance(OverriddenTypoScriptFrontendController::class, $GLOBALS['TYPO3_CONF_VARS'], $pageId, 0);
 
             // for certain situations we need to trick TSFE into granting us
             // access to the page in any case to make getPageAndRootline() work
             // see http://forge.typo3.org/issues/42122
-            $pageRecord = BackendUtility::getRecord('pages', $pageId, 'fe_group');
+            $pageRecord = BackendUtility::getRecord('pages', $pageId, 'fe_group, pid');
+            if ($pageRecord['pid'] != 0 && !$pageRecord['fe_group']) {
+                $rootLine = GeneralUtility::makeInstance(RootlineUtility::class, $pageId)->get();
+                foreach ($rootLine as $parent) {
+                    if ($parent['extendToSubpages']) {
+                        $pageRecord['fe_group'] = $parent['fe_group'];
+                        break;
+                    }
+                }
+            }
             $groupListBackup = $GLOBALS['TSFE']->gr_list;
-            $GLOBALS['TSFE']->gr_list = $pageRecord['fe_group'];
-
-            $GLOBALS['TSFE']->sys_page = GeneralUtility::makeInstance(PageRepository::class);
-            self::getPageAndRootlineOfTSFE($pageId);
-
-            // restore gr_list
-            $GLOBALS['TSFE']->gr_list = $groupListBackup;
-
             $GLOBALS['TSFE']->initTemplate();
             $GLOBALS['TSFE']->forceTemplateParsing = true;
             $GLOBALS['TSFE']->initFEuser();
             $GLOBALS['TSFE']->initUserGroups();
+            $GLOBALS['TSFE']->gr_list =  $pageRecord['fe_group'];
+
             //  $GLOBALS['TSFE']->getCompressedTCarray(); // seems to cause conflicts sometimes
+            $GLOBALS['TSFE']->sys_page = GeneralUtility::makeInstance(PageRepository::class);
+            self::getPageAndRootlineOfTSFE($pageId);
 
             $GLOBALS['TSFE']->no_cache = true;
             $GLOBALS['TSFE']->tmpl->start($GLOBALS['TSFE']->rootLine);
@@ -358,6 +362,9 @@ class Util
             if ($useCache) {
                 $tsfeCache[$cacheId] = $GLOBALS['TSFE'];
             }
+
+            // restore gr_list
+            $GLOBALS['TSFE']->gr_list = $groupListBackup;
         }
 
         if ($useCache) {
