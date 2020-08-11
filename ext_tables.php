@@ -7,6 +7,10 @@ if (!defined('TYPO3_MODE')) {
 if (TYPO3_MODE == 'BE') {
     $modulePrefix = 'extensions-solr-module';
     $svgProvider = \TYPO3\CMS\Core\Imaging\IconProvider\SvgIconProvider::class;
+    /* @var \ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration $extensionConfiguration */
+    $extensionConfiguration = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(
+        \ApacheSolrForTypo3\Solr\System\Configuration\ExtensionConfiguration::class
+    );
 
     // register all module icons with extensions-solr-module-modulename
     $extIconPath = 'EXT:solr/Resources/Public/Images/Icons/';
@@ -37,7 +41,7 @@ if (TYPO3_MODE == 'BE') {
         null,
         [
             'name' => 'searchbackend',
-            'labels' => 'LLL:EXT:' . $_EXTKEY . '/Resources/Private/Language/locallang_mod.xlf',
+            'labels' => 'LLL:EXT:solr/Resources/Private/Language/locallang_mod.xlf',
             'iconIdentifier' => 'extensions-solr-module-main'
         ]
     );
@@ -45,7 +49,7 @@ if (TYPO3_MODE == 'BE') {
     $treeComponentId = 'TYPO3/CMS/Backend/PageTree/PageTreeElement';
 
     \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerModule(
-        'ApacheSolrForTypo3.' . $_EXTKEY,
+        'ApacheSolrForTypo3.solr',
         'searchbackend',
         'Info',
         '',
@@ -55,13 +59,13 @@ if (TYPO3_MODE == 'BE') {
         [
             'access' => 'user,group',
             'icon' => 'EXT:solr/Resources/Public/Images/Icons/ModuleInfo.svg',
-            'labels' => 'LLL:EXT:' . $_EXTKEY . '/Resources/Private/Language/locallang_mod_info.xlf',
+            'labels' => 'LLL:EXT:solr/Resources/Private/Language/locallang_mod_info.xlf',
             'navigationComponentId' => $treeComponentId
         ]
     );
 
     \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerModule(
-        'ApacheSolrForTypo3.' . $_EXTKEY,
+        'ApacheSolrForTypo3.solr',
         'searchbackend',
         'CoreOptimization',
         '',
@@ -71,13 +75,13 @@ if (TYPO3_MODE == 'BE') {
         [
             'access' => 'user,group',
             'icon' => 'EXT:solr/Resources/Public/Images/Icons/ModuleCoreOptimization.svg',
-            'labels' => 'LLL:EXT:' . $_EXTKEY . '/Resources/Private/Language/locallang_mod_coreoptimize.xlf',
+            'labels' => 'LLL:EXT:solr/Resources/Private/Language/locallang_mod_coreoptimize.xlf',
             'navigationComponentId' => $treeComponentId
         ]
     );
 
     \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerModule(
-        'ApacheSolrForTypo3.' . $_EXTKEY,
+        'ApacheSolrForTypo3.solr',
         'searchbackend',
         'IndexQueue',
         '',
@@ -87,13 +91,13 @@ if (TYPO3_MODE == 'BE') {
         [
             'access' => 'user,group',
             'icon' => 'EXT:solr/Resources/Public/Images/Icons/ModuleIndexQueue.svg',
-            'labels' => 'LLL:EXT:' . $_EXTKEY . '/Resources/Private/Language/locallang_mod_indexqueue.xlf',
+            'labels' => 'LLL:EXT:solr/Resources/Private/Language/locallang_mod_indexqueue.xlf',
             'navigationComponentId' => $treeComponentId
         ]
     );
 
     \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerModule(
-        'ApacheSolrForTypo3.' . $_EXTKEY,
+        'ApacheSolrForTypo3.solr',
         'searchbackend',
         'IndexAdministration',
         '',
@@ -103,13 +107,14 @@ if (TYPO3_MODE == 'BE') {
         [
             'access' => 'user,group',
             'icon' => 'EXT:solr/Resources/Public/Images/Icons/ModuleIndexAdministration.svg',
-            'labels' => 'LLL:EXT:' . $_EXTKEY . '/Resources/Private/Language/locallang_mod_indexadmin.xlf',
+            'labels' => 'LLL:EXT:solr/Resources/Private/Language/locallang_mod_indexadmin.xlf',
             'navigationComponentId' => $treeComponentId
         ]
     );
 
     // registering reports
     $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['reports']['tx_reports']['status']['providers']['solr'] = [
+        \ApacheSolrForTypo3\Solr\Report\SiteHandlingStatus::class,
         \ApacheSolrForTypo3\Solr\Report\SchemaStatus::class,
         \ApacheSolrForTypo3\Solr\Report\SolrConfigStatus::class,
         \ApacheSolrForTypo3\Solr\Report\SolrConfigurationStatus::class,
@@ -119,9 +124,6 @@ if (TYPO3_MODE == 'BE') {
         \ApacheSolrForTypo3\Solr\Report\AllowUrlFOpenStatus::class,
         \ApacheSolrForTypo3\Solr\Report\FilterVarStatus::class
     ];
-
-    // register Clear Cache Menu hook
-    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['additionalBackendItems']['cacheActions']['clearSolrConnectionCache'] = \ApacheSolrForTypo3\Solr\System\Hooks\Backend\Toolbar\ClearCacheActionsHook::class;
 }
 
 if ((TYPO3_MODE === 'BE') || (TYPO3_MODE === 'FE' && isset($_POST['TSFE_EDIT']))) {
@@ -139,11 +141,9 @@ if ((TYPO3_MODE === 'BE') || (TYPO3_MODE === 'FE' && isset($_POST['TSFE_EDIT']))
 
 # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- # ----- #
 
-$GLOBALS['TYPO3_CONF_VARS']['BE']['ContextMenu']['ItemProviders'][1487876780] = \ApacheSolrForTypo3\Solr\ContextMenu\ItemProviders\InitializeConnectionProvider::class;
-
 $isComposerMode = defined('TYPO3_COMPOSER_MODE') && TYPO3_COMPOSER_MODE;
 if(!$isComposerMode) {
     // we load the autoloader for our libraries
-    $dir = \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extPath($_EXTKEY);
+    $dir = \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extPath('solr');
     require $dir . '/Resources/Private/Php/ComposerLibraries/vendor/autoload.php';
 }

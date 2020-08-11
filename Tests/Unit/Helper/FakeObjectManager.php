@@ -44,7 +44,7 @@ class FakeObjectManager implements ObjectManagerInterface
      * @param string $objectName Name of the object
      * @return bool TRUE if the object has been registered, otherwise FALSE
      */
-    public function isRegistered($objectName)
+    public function isRegistered(string $objectName): bool
     {
         throw new InvalidArgumentException("Not implemented in the FakeObjectManager");
     }
@@ -56,12 +56,13 @@ class FakeObjectManager implements ObjectManagerInterface
      * @return object The object instance
      * @api
      */
-    public function get($objectName, ...$constructorArguments)
+    public function get(string $objectName, ...$constructorArguments): object
     {
         $arguments = func_get_args();
 
         $instance = call_user_func_array([GeneralUtility::class, 'makeInstance'], $arguments);
         if (method_exists($instance, 'injectObjectManager')) {
+            // @extensionScannerIgnoreLine
             $instance->injectObjectManager($this);
         }
 
@@ -75,7 +76,7 @@ class FakeObjectManager implements ObjectManagerInterface
      * @return object
      * @api
      */
-    public function getEmptyObject($className)
+    public function getEmptyObject(string $className): object
     {
         throw new InvalidArgumentException("Not implemented in the FakeObjectManager");
     }
@@ -86,7 +87,7 @@ class FakeObjectManager implements ObjectManagerInterface
      * @param string $objectName The object name
      * @return int One of the Container::SCOPE_ constants
      */
-    public function getScope($objectName)
+    public function getScope(string $objectName): int
     {
         throw new InvalidArgumentException("Not implemented in the FakeObjectManager");
     }

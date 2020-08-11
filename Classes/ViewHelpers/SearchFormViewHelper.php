@@ -16,6 +16,7 @@ namespace ApacheSolrForTypo3\Solr\ViewHelpers;
 
 use ApacheSolrForTypo3\Solr\System\Url\UrlHelper;
 use ApacheSolrForTypo3\Solr\System\Util\SiteUtility;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
@@ -25,7 +26,6 @@ use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\ViewHelpers
  */
 class SearchFormViewHelper extends AbstractSolrFrontendTagBasedViewHelper
 {
@@ -114,20 +114,72 @@ class SearchFormViewHelper extends AbstractSolrFrontendTagBasedViewHelper
         $this->tag->addAttribute('accept-charset', $this->frontendController->metaCharset);
 
         // Get search term
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->add('q', $this->getQueryString());
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->add('pageUid', $pageUid);
-        $this->getTemplateVariableContainer()->add('languageUid', $this->frontendController->sys_language_uid);
-
+        // @extensionScannerIgnoreLine
+        $this->getTemplateVariableContainer()->add('languageUid', Util::getLanguageUid());
+        // @extensionScannerIgnoreLine
+        $this->getTemplateVariableContainer()->add('existingParameters', $this->getExistingSearchParameters());
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->add('addPageAndLanguageId', !$this->getIsSiteManagedSite($pageUid));
         $formContent = $this->renderChildren();
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->remove('addPageAndLanguageId');
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->remove('q');
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->remove('pageUid');
+        // @extensionScannerIgnoreLine
         $this->getTemplateVariableContainer()->remove('languageUid');
+        // @extensionScannerIgnoreLine
+        $this->getTemplateVariableContainer()->remove('existingParameters');
 
         $this->tag->setContent($formContent);
 
         return $this->tag->render();
+    }
+
+    /**
+     * Get the existing search parameters in an array
+     * Returns an empty array if search.keepExistingParametersForNewSearches is not set
+     *
+     * @return array
+     */
+    protected function getExistingSearchParameters()
+    {
+        $searchParameters = [];
+        if ($this->getTypoScriptConfiguration()->getSearchKeepExistingParametersForNewSearches()) {
+            $arguments = GeneralUtility::_GPmerged('tx_solr');
+            unset($arguments['q'], $arguments['id'], $arguments['L']);
+            $searchParameters = $this->translateSearchParametersToInputTagAttributes($arguments);
+        }
+        return $searchParameters;
+    }
+
+    /**
+     * Translate the multi-dimensional array of existing arguments into a flat array of name-value pairs for the input tags
+     *
+     * @param $arguments
+     * @param string $nameAttributePrefix
+     * @return array
+     */
+    protected function translateSearchParametersToInputTagAttributes($arguments, $nameAttributePrefix = '')
+    {
+        $attributes = [];
+        foreach ($arguments as $key => $value) {
+            $name = $nameAttributePrefix . '[' . $key . ']';
+            if (is_array($value)) {
+                $attributes = array_merge(
+                    $attributes,
+                    $this->translateSearchParametersToInputTagAttributes($value, $name)
+                );
+            } else {
+                $attributes[$name] = $value;
+            }
+        }
+        return $attributes;
     }
 
     /**
@@ -186,7 +238,19 @@ class SearchFormViewHelper extends AbstractSolrFrontendTagBasedViewHelper
     protected function buildUriFromPageUidAndArguments($pageUid): string
     {
         $uriBuilder = $this->getControllerContext()->getUriBuilder();
-        $uri = $uriBuilder->reset()->setTargetPageUid($pageUid)->setTargetPageType($this->arguments['pageType'])->setNoCache($this->arguments['noCache'])->setUseCacheHash(!$this->arguments['noCacheHash'])->setArguments($this->arguments['additionalParams'])->setCreateAbsoluteUri($this->arguments['absolute'])->setAddQueryString($this->arguments['addQueryString'])->setArgumentsToBeExcludedFromQueryString($this->arguments['argumentsToBeExcludedFromQueryString'])->setAddQueryStringMethod($this->arguments['addQueryStringMethod'])->setSection($this->arguments['section'])->build();
+        $uri = $uriBuilder
+            ->reset()
+            ->setTargetPageUid($pageUid)
+            ->setTargetPageType($this->arguments['pageType'] ?? 0)
+            ->setNoCache($this->arguments['noCache'] ?? false)
+            ->setUseCacheHash(!$this->arguments['noCacheHash'])
+            ->setArguments($this->arguments['additionalParams'] ?? [])
+            ->setCreateAbsoluteUri($this->arguments['absolute'] ?? false)
+            ->setAddQueryString($this->arguments['addQueryString'] ?? false)
+            ->setArgumentsToBeExcludedFromQueryString($this->arguments['argumentsToBeExcludedFromQueryString'] ?? [])
+            ->setAddQueryStringMethod($this->arguments['addQueryStringMethod'] ?? '')
+            ->setSection($this->arguments['section'] ?? '')
+            ->build();
         return $uri;
     }
 }

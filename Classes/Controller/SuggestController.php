@@ -27,6 +27,7 @@ namespace ApacheSolrForTypo3\Solr\Controller;
 
 use ApacheSolrForTypo3\Solr\Domain\Search\Suggest\SuggestService;
 use ApacheSolrForTypo3\Solr\System\Solr\SolrUnavailableException;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -34,7 +35,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Controller
  */
 class SuggestController extends AbstractBaseController
 {
@@ -46,9 +46,8 @@ class SuggestController extends AbstractBaseController
      * @param array $additionalFilters
      * @return string
      */
-    public function suggestAction($queryString, $callback, $additionalFilters = [])
+    public function suggestAction($queryString, $callback = null, $additionalFilters = [])
     {
-        $jsonPCallback = htmlspecialchars($callback);
         // Get suggestions
         $rawQuery = htmlspecialchars(mb_strtolower(trim($queryString)));
 
@@ -62,7 +61,7 @@ class SuggestController extends AbstractBaseController
 
             $additionalFilters = is_array($additionalFilters) ? array_map("htmlspecialchars", $additionalFilters) : [];
             $pageId = $this->typoScriptFrontendController->getRequestedId();
-            $languageId = $this->typoScriptFrontendController->sys_language_uid;
+            $languageId = Util::getLanguageUid();
             $arguments = (array)$this->request->getArguments();
 
             $searchRequest = $this->getSearchRequestBuilder()->buildForSuggest($arguments, $rawQuery, $pageId, $languageId);
@@ -71,8 +70,12 @@ class SuggestController extends AbstractBaseController
             $this->handleSolrUnavailable();
             $result = ['status' => false];
         }
-
-        return htmlspecialchars($jsonPCallback) . '(' . json_encode($result) . ')';
+        if ($callback) {
+            return htmlspecialchars($callback) . '(' . json_encode($result) . ')';
+        }
+        else {
+            return json_encode($result);
+        }
     }
 
 }

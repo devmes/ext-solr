@@ -27,7 +27,6 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index\Queue\GarbageRemover;
 
 /**
  * Class StrategyFactory
- * @package ApacheSolrForTypo3\Solr\Domain\Index\Queue\GarbageRemover
  */
 class StrategyFactory {
 
@@ -37,7 +36,7 @@ class StrategyFactory {
      */
     public static function getByTable($table)
     {
-        $isPageRelated = in_array($table, ['tt_content','pages','pages_language_overlay']);
+        $isPageRelated = in_array($table, ['tt_content','pages']);
         return $isPageRelated ? new PageStrategy() : new RecordStrategy();
     }
 }

@@ -30,6 +30,8 @@ namespace ApacheSolrForTypo3\Solr\Domain\Index\PageIndexer\Helper\UriBuilder;
 
 use ApacheSolrForTypo3\Solr\IndexQueue\Item;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
+use TYPO3\CMS\Core\Exception\SiteNotFoundException;
+use TYPO3\CMS\Core\Routing\InvalidRouteArgumentsException;
 use TYPO3\CMS\Core\Site\SiteFinder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -37,8 +39,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * This class is used to build the indexing url for a TYPO3 site that is managed with the TYPO3 site management.
  *
  * These sites have the pageId and language information encoded in the speaking url.
- *
- * @package ApacheSolrForTypo3\Solr\Domain\Index\PageIndexer\Helper\UriBuilder
  */
 class TYPO3SiteStrategy extends AbstractUriStrategy
 {
@@ -63,10 +63,12 @@ class TYPO3SiteStrategy extends AbstractUriStrategy
      * @param int $language
      * @param string $mountPointParameter
      * @return string
+     * @throws SiteNotFoundException
+     * @throws InvalidRouteArgumentsException
      */
     protected function buildPageIndexingUriFromPageItemAndLanguageId(Item $item, int $language = 0,  string $mountPointParameter = '')
     {
-        $site = $this->siteFinder->getSiteByPageId($item->getRecordUid());
+        $site = $this->siteFinder->getSiteByPageId((int)$item->getRecordUid());
         $parameters = [];
 
         if ($language > 0) {

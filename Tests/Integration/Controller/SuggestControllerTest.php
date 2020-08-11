@@ -87,11 +87,12 @@ class SuggestControllerTest extends AbstractFrontendControllerTest
 
     /**
      * @test
+     * @group frontend
      */
     public function canDoABasicSuggest()
     {
         $this->importDataSetFromFixture('can_render_suggest_controller.xml');
-        $GLOBALS['TSFE'] = $this->getConfiguredTSFE([], 1);
+        $GLOBALS['TSFE'] = $this->getConfiguredTSFE(1);
         $this->indexPages([1, 2, 3, 4, 5, 6, 7, 8]);
 
         $this->suggestRequest->setArgument('queryString', 'Sweat');

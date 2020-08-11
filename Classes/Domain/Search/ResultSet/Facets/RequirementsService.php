@@ -20,7 +20,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * Service class to check for a facet if allRequirements are met for that facet.
  *
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facet
  */
 class RequirementsService
 {
@@ -43,13 +42,13 @@ class RequirementsService
             $requirementMet = $this->getRequirementMet($facet, $requirement);
             $requirementMet = $this->getNegationWhenConfigured($requirementMet, $requirement);
 
-            if ($requirementMet) {
-                // early return
-                return true;
+            if (!$requirementMet) {
+                // early return as soon as one requirement is not met
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
 
     /**

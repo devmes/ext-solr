@@ -20,6 +20,7 @@ use ApacheSolrForTypo3\Solr\Search;
 use ApacheSolrForTypo3\Solr\System\Configuration\ConfigurationManager;
 use ApacheSolrForTypo3\Solr\Mvc\Controller\SolrControllerContext;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
+use ApacheSolrForTypo3\Solr\Util;
 use ApacheSolrForTypo3\Solr\Widget\WidgetRequest;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Fluid\Core\Widget\AbstractWidgetController as CoreAbstractWidgetController;
@@ -29,7 +30,6 @@ use TYPO3\CMS\Fluid\Core\Widget\AbstractWidgetController as CoreAbstractWidgetCo
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Widget
  */
 class AbstractWidgetController extends CoreAbstractWidgetController
 {
@@ -103,7 +103,7 @@ class AbstractWidgetController extends CoreAbstractWidgetController
     protected function initializeSearch(TypoScriptConfiguration $typoScriptConfiguration)
     {
         /** @var \ApacheSolrForTypo3\Solr\ConnectionManager $solrConnection */
-        $solrConnection = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId($GLOBALS['TSFE']->id, $GLOBALS['TSFE']->sys_language_uid, $GLOBALS['TSFE']->MP);
+        $solrConnection = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId($GLOBALS['TSFE']->id, Util::getLanguageUid(), $GLOBALS['TSFE']->MP);
         $search = GeneralUtility::makeInstance(Search::class, /** @scrutinizer ignore-type */ $solrConnection);
 
         return GeneralUtility::makeInstance(

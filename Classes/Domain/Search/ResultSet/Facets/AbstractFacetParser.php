@@ -25,7 +25,6 @@ use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facets
  */
 abstract class AbstractFacetParser implements FacetParserInterface
 {
@@ -147,7 +146,10 @@ abstract class AbstractFacetParser implements FacetParserInterface
             return $facet;
         }
         $fields = GeneralUtility::trimExplode(',', $facetConfiguration['manualSortOrder']);
+        // @extensionScannerIgnoreLine
         $sortedOptions = $facet->getOptions()->getManualSortedCopy($fields);
+
+        // @extensionScannerIgnoreLine
         $facet->setOptions($sortedOptions);
 
         return $facet;
@@ -164,6 +166,7 @@ abstract class AbstractFacetParser implements FacetParserInterface
             return $facet;
         }
 
+        // @extensionScannerIgnoreLine
         $facet->setOptions($facet->getOptions()->getReversedOrderCopy());
 
         return $facet;

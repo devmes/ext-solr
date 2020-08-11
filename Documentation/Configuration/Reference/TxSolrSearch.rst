@@ -6,16 +6,6 @@
 .. include:: ../../Includes.txt
 
 
-.. raw:: latex
-
-    \newpage
-
-.. raw:: pdf
-
-   PageBreak
-
-.. _conf-tx-solr-search:
-
 tx_solr.search
 ===============
 
@@ -369,7 +359,7 @@ This parameter defines the "phrase slop" value, which represents the number of p
 Note: The value of this setting has NO influence on explicit phrase search.
 
 query.phrase.querySlop
-~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 :Type: Integer
 :TS Path: plugin.tx_solr.search.query.phrase.querySlop
@@ -423,7 +413,7 @@ This parameter defines the "bigram phrase slop" value, which represents the numb
 Note: The value of this setting has NO influence on explicit phrase search.
 
 query.trigramPhrase
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 :Type: Boolean
 :TS Path: plugin.tx_solr.search.query.trigramPhrase
@@ -435,7 +425,7 @@ This parameter enables the phrase search feature from Apache Solr. Setting is to
 Enabling phrase search feature influences the scores of documents with phrase occurrences.
 
 query.trigramPhrase.fields
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :Type: String
 :TS Path: plugin.tx_solr.search.query.trigramPhrase.fields
@@ -449,7 +439,7 @@ Fields are defined as a comma separated list and same way as queryFields.
 Note: The value of this setting has NO influence on explicit phrase search.
 
 query.trigramPhrase.slop
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 :Type: Integer
 :TS Path: plugin.tx_solr.search.query.trigramPhrase.slop
@@ -550,25 +540,6 @@ results.resultsPerPageSwitchOptions
 :Default: 10, 25, 50
 
 Defines the shown options of possible results per page.
-
-results.pagebrowser
-~~~~~~~~~~~~~~~~~~~
-
-:Since: 2.0
-:TS Path: plugin.tx_solr.search.results.pagebrowser
-
-Allows to set configuration options for the pagebrowser provided by EXT:pagebrowse.
-
-results.ignorePageBrowser
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:Type: Boolean
-:TS Path: plugin.tx_solr.search.results.ignorePageBrowser
-:Since: 1.0
-:Default: 0
-:Options: 0, 1
-
-If enabled, the selected page will be ignored. Useful if you place two search plugins on a page but want one of the to always show the first results only.
 
 results.showDocumentScoreAnalysis
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1027,7 +998,7 @@ faceting.facets.[facetName].metrics
 :Since: 8.0
 :Default: empty
 
-Metrics can be use to collect and enhance facet options with statistical data of the facetted documents. They can
+Metrics can be use to collect and enhance facet options with statistical data of the faceted documents. They can
 be used to render useful information in the context of an facet option.
 
 Example:

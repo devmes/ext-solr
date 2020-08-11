@@ -33,8 +33,6 @@ use TYPO3\CMS\Scheduler\Task\AbstractTask;
 /**
  * Abstract scheduler task for solr scheduler tasks, contains the logic to
  * retrieve the site, avoids serialization of site, when scheduler task is saved.
- *
- * @package ApacheSolrForTypo3\Solr\Task
  */
 abstract class AbstractSolrTask extends AbstractTask {
     /**
@@ -94,8 +92,8 @@ abstract class AbstractSolrTask extends AbstractTask {
     public function __sleep()
     {
         $properties = get_object_vars($this);
-        // avoid serialization if the site object
-        unset($properties['site']);
+        // avoid serialization of the site and logger object
+        unset($properties['site'], $properties['logger']);
         return array_keys($properties);
     }
 }

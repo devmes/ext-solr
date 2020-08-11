@@ -32,8 +32,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * The DefaultResultParser is able to parse normal(ungroupd results)
- *
- * @package ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Result\Parser
  */
 class DefaultResultParser extends AbstractResultParser {
 
@@ -47,13 +45,17 @@ class DefaultResultParser extends AbstractResultParser {
         $searchResults = GeneralUtility::makeInstance(SearchResultCollection::class);
         $parsedData = $resultSet->getResponse()->getParsedData();
 
+        // @extensionScannerIgnoreLine
         $resultSet->setMaximumScore($parsedData->response->maxScore ?? 0.0);
+        // @extensionScannerIgnoreLine
         $resultSet->setAllResultCount($parsedData->response->numFound ?? 0);
 
+        // @extensionScannerIgnoreLine
         if (!is_array($parsedData->response->docs)) {
             return $resultSet;
         }
 
+        // @extensionScannerIgnoreLine
         $documents = $parsedData->response->docs;
         if (!$useRawDocuments) {
             $documents = $this->documentEscapeService->applyHtmlSpecialCharsOnAllFields($documents);

@@ -82,6 +82,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
         $pageIndexingHookRegistration = PageIndexer::class;
 
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['initFEuser'][__CLASS__] = $pageIndexingHookRegistration . '->authorizeFrontendUser';
+        // disable TSFE cache for TYPO3 v9
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['tslib_fe-PostProc'][__CLASS__] = $pageIndexingHookRegistration . '->disableCaching';
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['pageIndexing'][__CLASS__] = $pageIndexingHookRegistration;
 
@@ -299,7 +300,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
             $this->responseData['originalPageDocument'] = (array)$indexer->getPageSolrDocument();
             $this->responseData['solrConnection'] = [
                 'rootPage' => $indexQueueItem->getRootPageUid(),
-                'sys_language_uid' => $GLOBALS['TSFE']->sys_language_uid,
+                'sys_language_uid' => Util::getLanguageUid(),
                 'solr' => (string)$solrConnection->getNode('write')
             ];
 
@@ -345,7 +346,7 @@ class PageIndexer extends AbstractFrontendHelper implements SingletonInterface
 
         $solrConnection = $connectionManager->getConnectionByRootPageId(
             $indexQueueItem->getRootPageUid(),
-            $GLOBALS['TSFE']->sys_language_uid
+            Util::getLanguageUid()
         );
 
         return $solrConnection;

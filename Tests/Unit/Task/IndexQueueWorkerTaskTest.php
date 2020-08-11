@@ -26,6 +26,7 @@ namespace ApacheSolrForTypo3\Solr\Tests\Unit\Task;
 
 use ApacheSolrForTypo3\Solr\Task\IndexQueueWorkerTask;
 use ApacheSolrForTypo3\Solr\Tests\Unit\UnitTest;
+use TYPO3\CMS\Core\Core\Environment;
 
 /**
  * Testcase for IndexQueueWorkerTask
@@ -46,16 +47,16 @@ class IndexQueueWorkerTaskTest extends UnitTest
             ->setMethods(['execute'])
             ->getMock();
 
-            // by default the webroot should be PATH_site
-        $this->assertSame(PATH_site, $indexQueuerWorker->getWebRoot(), 'Not using PATH_site as webroot');
+        // by default the webroot should be Environment::getPublicPath()
+        $this->assertSame(Environment::getPublicPath() . '/', $indexQueuerWorker->getWebRoot(), 'Not using PATH_site as webroot');
 
-            // can we overwrite it?
+        // can we overwrite it?
         $indexQueuerWorker->setForcedWebRoot('/var/www/foobar.de/subdir');
         $this->assertSame('/var/www/foobar.de/subdir', $indexQueuerWorker->getWebRoot(), 'Can not force a webroot');
 
-            // can we use a marker?
+        // can we use a marker?
         $indexQueuerWorker->setForcedWebRoot('###PATH_site###../test/');
-        $this->assertSame(PATH_site . '../test/', $indexQueuerWorker->getWebRoot(), 'Could not use a marker in forced webroot');
+        $this->assertSame(Environment::getPublicPath() . '/../test/', $indexQueuerWorker->getWebRoot(), 'Could not use a marker in forced webroot');
     }
 
     /**

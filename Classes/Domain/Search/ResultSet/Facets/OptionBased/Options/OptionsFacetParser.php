@@ -17,12 +17,27 @@ namespace ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facets\OptionBased\Opt
 use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facets\AbstractFacetParser;
 use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\SearchResultSet;
 use ApacheSolrForTypo3\Solr\System\Solr\ResponseAdapter;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
 
 /**
  * Class OptionsFacetParser
  */
 class OptionsFacetParser extends AbstractFacetParser
 {
+    /**
+     * @var Dispatcher
+     */
+    protected $dispatcher;
+
+    /**
+     * @param Dispatcher $dispatcher
+     */
+    public function injectDispatcher(Dispatcher $dispatcher)
+    {
+        $this->dispatcher = $dispatcher;
+    }
+
     /**
      * @param SearchResultSet $resultSet
      * @param string $facetName
@@ -68,7 +83,7 @@ class OptionsFacetParser extends AbstractFacetParser
 
             $isOptionsActive = in_array($optionsValue, $optionsFromRequest);
             $label = $this->getLabelFromRenderingInstructions($optionsValue, $count, $facetName, $facetConfiguration);
-            $facet->addOption(new Option($facet, $label, $optionsValue, $count, $isOptionsActive, $metricsFromSolrResponse[$optionsValue]));
+            $facet->addOption($this->objectManager->get(Option::class, $facet, $label, $optionsValue, $count, $isOptionsActive, $metricsFromSolrResponse[$optionsValue]));
         }
 
         // after all options have been created we apply a manualSortOrder if configured
@@ -76,6 +91,10 @@ class OptionsFacetParser extends AbstractFacetParser
         // need to be handled in the frontend.
         $this->applyManualSortOrder($facet, $facetConfiguration);
         $this->applyReverseOrder($facet, $facetConfiguration);
+
+        if(!is_null($this->dispatcher)) {
+            $this->dispatcher->dispatch(__CLASS__, 'optionsParsed', [&$facet, $facetConfiguration]);
+        }
 
         return $facet;
     }

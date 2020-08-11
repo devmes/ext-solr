@@ -17,6 +17,7 @@ namespace ApacheSolrForTypo3\Solr\Controller;
 use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\SearchResultSet;
 use ApacheSolrForTypo3\Solr\System\Logging\SolrLogManager;
 use ApacheSolrForTypo3\Solr\System\Solr\SolrUnavailableException;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Extbase\Mvc\View\ViewInterface;
 use TYPO3\CMS\Extbase\Mvc\Web\Response;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -27,7 +28,6 @@ use TYPO3\CMS\Fluid\View\TemplateView;
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Controller
  */
 class SearchController extends AbstractBaseController
 {
@@ -96,7 +96,7 @@ class SearchController extends AbstractBaseController
         try {
             $arguments = (array)$this->request->getArguments();
             $pageId = $this->typoScriptFrontendController->getRequestedId();
-            $languageId = $this->typoScriptFrontendController->sys_language_uid;
+            $languageId = Util::getLanguageUid();
             $searchRequest = $this->getSearchRequestBuilder()->buildForSearch($arguments, $pageId, $languageId);
 
             $searchResultSet = $this->searchService->search($searchRequest);
@@ -108,7 +108,8 @@ class SearchController extends AbstractBaseController
             $values = [
                 'additionalFilters' => $this->getAdditionalFilters(),
                 'resultSet' => $searchResultSet,
-                'pluginNamespace' => $this->typoScriptConfiguration->getSearchPluginNamespace()
+                'pluginNamespace' => $this->typoScriptConfiguration->getSearchPluginNamespace(),
+                'arguments' => $arguments
             ];
 
             $values = $this->emitActionSignal(__CLASS__, __FUNCTION__, [$values]);
@@ -144,7 +145,7 @@ class SearchController extends AbstractBaseController
         $searchResultSet = GeneralUtility::makeInstance(SearchResultSet::class);
 
         $pageId = $this->typoScriptFrontendController->getRequestedId();
-        $languageId = $this->typoScriptFrontendController->sys_language_uid;
+        $languageId = Util::getLanguageUid();
         $searchRequest = $this->getSearchRequestBuilder()->buildForFrequentSearches($pageId, $languageId);
         $searchResultSet->setUsedSearchRequest($searchRequest);
 

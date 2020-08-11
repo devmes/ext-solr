@@ -9,38 +9,51 @@ fi
 EXTENSION_ROOTPATH="$SCRIPTPATH/../../"
 SOLR_INSTALL_PATH="/opt/solr-tomcat/"
 
+DEFAULT_TYPO3_VERSION="^10.4"
+DEFAULT_PHP_CS_FIXER_VERSION="^2.16.1"
+DEFAULT_TYPO3_DATABASE_HOST="localhost"
+DEFAULT_TYPO3_DATABASE_NAME="test"
+DEFAULT_TYPO3_DATABASE_USERNAME="root"
+DEFAULT_TYPO3_DATABASE_PASSWORD="supersecret"
+
 if [[ $* == *--use-defaults* ]]; then
-    export TYPO3_VERSION="^8.7"
-    export PHP_CS_FIXER_VERSION="v2.3.2"
-    export TYPO3_DATABASE_HOST="localhost"
-    export TYPO3_DATABASE_NAME="test"
-    export TYPO3_DATABASE_USERNAME="root"
-    export TYPO3_DATABASE_PASSWORD="supersecret"
+    export TYPO3_VERSION=$DEFAULT_TYPO3_VERSION
+    export PHP_CS_FIXER_VERSION=$DEFAULT_PHP_CS_FIXER_VERSION
+    export TYPO3_DATABASE_HOST=$DEFAULT_TYPO3_DATABASE_HOST
+    export TYPO3_DATABASE_NAME=$DEFAULT_TYPO3_DATABASE_NAME
+    export TYPO3_DATABASE_USERNAME=$DEFAULT_TYPO3_DATABASE_USERNAME
+    export TYPO3_DATABASE_PASSWORD=$DEFAULT_TYPO3_DATABASE_PASSWORD
 fi
 
 if [[ $* == *--local* ]]; then
-    echo -n "Choose a TYPO3 Version (e.g. dev-master,^8.7): "
+    echo -n "Choose a TYPO3 Version [dafults: " $DEFAULT_TYPO3_VERSION"] : "
     read typo3Version
+    if [ -z "$typo3Version" ]; then typo3Version=$DEFAULT_TYPO3_VERSION; fi
     export TYPO3_VERSION=$typo3Version
 
-    echo -n "Choose a php-cs-fixer version (v2.3.2): "
+    echo -n "Choose a php-cs-fixer version [dafults: " $DEFAULT_PHP_CS_FIXER_VERSION"] : "
     read phpCSFixerVersion
+    if [ -z "$phpCSFixerVersion" ]; then phpCSFixerVersion=$DEFAULT_PHP_CS_FIXER_VERSION; fi
     export PHP_CS_FIXER_VERSION=$phpCSFixerVersion
 
-    echo -n "Choose a database hostname: "
+    echo -n "Choose a database hostname: [dafults: " $DEFAULT_TYPO3_DATABASE_HOST"] : "
     read typo3DbHost
+    if [ -z "$typo3DbHost" ]; then typo3DbHost=$DEFAULT_TYPO3_DATABASE_HOST; fi
     export TYPO3_DATABASE_HOST=$typo3DbHost
 
-    echo -n "Choose a database name: "
+    echo -n "Choose a database name: [dafults: " $DEFAULT_TYPO3_DATABASE_NAME"] : "
     read typo3DbName
+    if [ -z "$typo3DbName" ]; then typo3DbName=$DEFAULT_TYPO3_DATABASE_NAME; fi
     export TYPO3_DATABASE_NAME=$typo3DbName
 
-    echo -n "Choose a database user: "
+    echo -n "Choose a database user: [dafults: " $DEFAULT_TYPO3_DATABASE_USERNAME"] : "
     read typo3DbUser
+    if [ -z "$typo3DbUser" ]; then typo3DbUser=$DEFAULT_TYPO3_DATABASE_USERNAME; fi
     export TYPO3_DATABASE_USERNAME=$typo3DbUser
 
-    echo -n "Choose a database password: "
+    echo -n "Choose a database password: [dafults: " $DEFAULT_TYPO3_DATABASE_PASSWORD"] : "
     read typo3DbPassword
+    if [ -z "$typo3DbPassword" ]; then typo3DbPassword=$DEFAULT_TYPO3_DATABASE_PASSWORD; fi
     export TYPO3_DATABASE_PASSWORD=$typo3DbPassword
 fi
 
@@ -49,6 +62,7 @@ echo "Using PHP-CS Fixer Version: $PHP_CS_FIXER_VERSION"
 echo "Using database host: $TYPO3_DATABASE_HOST"
 echo "Using database dbname: $TYPO3_DATABASE_NAME"
 echo "Using database user: $TYPO3_DATABASE_USERNAME"
+echo "Using database password: $TYPO3_DATABASE_PASSWORD"
 
 if [ -z $TYPO3_VERSION ]; then
 	echo "Must set env var TYPO3_VERSION (e.g. dev-master or ^9.5)"
@@ -62,8 +76,8 @@ if [ $? -ne "0" ]; then
 fi
 
 # Install build tools
+echo "Install build tools: "
 composer global require friendsofphp/php-cs-fixer:"$PHP_CS_FIXER_VERSION"
-composer global require scrutinizer/ocular:"1.5.2"
 composer global require namelesscoder/typo3-repository-client
 
 # Setup TYPO3 environment variables
@@ -75,16 +89,36 @@ echo "Using web path $TYPO3_PATH_WEB"
 
 # Install TYPO3 sources
 
-if [[ $TYPO3_VERSION = *"master"*  ]]; then
+if [[ $TYPO3_VERSION = *"dev"* ]]; then
     composer config minimum-stability dev
 fi
 
-composer require --dev --update-with-dependencies typo3/cms-core="$TYPO3_VERSION" typo3/cms-backend="$TYPO3_VERSION" typo3/cms-fluid="$TYPO3_VERSION" typo3/cms-frontend="$TYPO3_VERSION" typo3/cms-extbase="$TYPO3_VERSION" typo3/cms-reports="$TYPO3_VERSION" typo3/cms-scheduler="$TYPO3_VERSION" typo3/cms-tstemplate="$TYPO3_VERSION"
+if [[ $TYPO3_VERSION = *"master"* ]]; then
+    TYPO3_MASTER_DEPENDENCIES='nimut/testing-framework:dev-master'
+fi
 
+# Temporary Fix for https://forge.typo3.org/issues/91832 "phpdocumentor/reflection-docblock" BC in 5.2.0
+if [[ $TYPO3_VERSION = *"10.4"* ]]; then
+    FIX_TYPO3_DEPENDENCIES='phpdocumentor/reflection-docblock:5.1.*'
+fi
+
+composer require --dev --update-with-dependencies --prefer-source \
+  typo3/cms-core:"$TYPO3_VERSION" \
+  typo3/cms-backend:"$TYPO3_VERSION" \
+  typo3/cms-fluid:"$TYPO3_VERSION" \
+  typo3/cms-frontend:"$TYPO3_VERSION" \
+  typo3/cms-extbase:"$TYPO3_VERSION" \
+  typo3/cms-reports:"$TYPO3_VERSION" \
+  typo3/cms-scheduler:"$TYPO3_VERSION" \
+  typo3/cms-tstemplate:"$TYPO3_VERSION" $FIX_TYPO3_DEPENDENCIES $TYPO3_MASTER_DEPENDENCIES
 
 # Restore composer.json
 mkdir -p $TYPO3_PATH_WEB/uploads $TYPO3_PATH_WEB/typo3temp
 
-# Setup Solr Using our install script
-chmod 500 ${EXTENSION_ROOTPATH}Resources/Private/Install/install-solr.sh
-${EXTENSION_ROOTPATH}Resources/Private/Install/install-solr.sh -d "$HOME/solr" -t
+
+if [[ $* != *--skip-solr-install* ]]; then
+    # Setup Solr Using our install script
+    echo "Setup Solr Using our install script: "
+    chmod 500 ${EXTENSION_ROOTPATH}Resources/Private/Install/install-solr.sh
+    ${EXTENSION_ROOTPATH}Resources/Private/Install/install-solr.sh -d "$HOME/solr" -t
+fi

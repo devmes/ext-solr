@@ -102,6 +102,7 @@ class Builder
         $this->addEndtimeField($document, $pageRecord);
 
         // content
+        // @extensionScannerIgnoreLine
         $contentExtractor = $this->getExtractorForPageContent($page->content);
         $document->setField('title', $contentExtractor->getPageTitle());
         $document->setField('subTitle', $pageRecord['subtitle']);
@@ -179,9 +180,9 @@ class Builder
      * @param string $mountPointParameter
      * @return string
      */
-    protected function getPageDocumentId(TypoScriptFrontendController $page, string $accessGroups, string $mountPointParameter): string
+    protected function getPageDocumentId(TypoScriptFrontendController $frontendController, string $accessGroups, string $mountPointParameter): string
     {
-        return Util::getPageDocumentId($page->id, $page->type, $page->sys_language_uid, $accessGroups, $mountPointParameter);
+        return Util::getPageDocumentId($frontendController->id, $frontendController->type, Util::getLanguageUid(), $accessGroups, $mountPointParameter);
     }
 
     /**

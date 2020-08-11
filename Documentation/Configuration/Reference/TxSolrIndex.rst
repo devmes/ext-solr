@@ -5,13 +5,6 @@
 
 .. include:: ../../Includes.txt
 
-.. raw:: latex
-
-    \newpage
-
-.. raw:: pdf
-
-   PageBreak
 
 .. _conf-tx-solr-index:
 
@@ -388,7 +381,7 @@ queue.pages.allowedPageTypes
 :Type: List of Integers
 :TS Path: plugin.tx_solr.index.queue.pages.allowedPageTypes
 :Since: 3.0
-:Default: 1,7
+:Default: 1,4,7
 
 Allows to set the pages types allowed to be indexed.
 
@@ -689,7 +682,7 @@ Example:
     }
 
 
-The ```matchPatterns`` can be used to configure pattern that can occure in the content to add that class. In addition ```unmatchPatterns```can be configured to define patterns that should not occure in the content.
+The ```matchPatterns``` can be used to configure pattern that can occure in the content to add that class. In addition ```unmatchPatterns``` can be configured to define patterns that should not occure in the content.
 
 Patterns are regular expressions. You configure everything that is possible with regular expressions.
 

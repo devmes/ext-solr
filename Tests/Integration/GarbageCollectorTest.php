@@ -32,8 +32,7 @@ use ApacheSolrForTypo3\Solr\IndexQueue\RecordMonitor;
 use ApacheSolrForTypo3\Solr\IndexQueue\Queue;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Core\Charset\CharsetConverter;
-use TYPO3\CMS\Lang\LanguageService;
+use TYPO3\CMS\Core\Localization\LanguageService;
 
 /**
  * This testcase is used to check if the GarbageCollector can delete garbage from the
@@ -72,6 +71,7 @@ class GarbageCollectorTest extends IntegrationTest
     public function setUp()
     {
         parent::setUp();
+        $this->writeDefaultSolrTestSiteConfiguration();
         $this->recordMonitor = GeneralUtility::makeInstance(RecordMonitor::class);
         $this->dataHandler = GeneralUtility::makeInstance(DataHandler::class);
         $this->indexQueue = GeneralUtility::makeInstance(Queue::class);
@@ -202,7 +202,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index a page with two content elements and expect solr contains the content of both
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
 
@@ -222,14 +222,14 @@ class GarbageCollectorTest extends IntegrationTest
         // we expect the is one item in the indexQueue
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
+        $this->assertSame(1, count($items));
 
         // we index this item
-        $itemIds = $this->getItemPageIds($items);
-        $this->indexPageIds($itemIds);
+        $this->indexPageIds([1]);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove deleted content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
     }
@@ -247,7 +247,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index a page with two content elements and expect solr contains the content of both
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
 
@@ -272,15 +272,14 @@ class GarbageCollectorTest extends IntegrationTest
         // we expect the is one item in the indexQueue
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
-
-        $itemIds = $this->getItemPageIds($items);
-
+        $this->assertSame(1, count($items));
+        
         // we index this item
-        $this->indexPageIds($itemIds);
+        $this->indexPageIds([1]);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove hidden content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
     }
@@ -298,7 +297,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index a page with two content elements and expect solr contains the content of both
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
 
@@ -326,14 +325,14 @@ class GarbageCollectorTest extends IntegrationTest
         // we expect the is one item in the indexQueue
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
+        $this->assertSame(1, count($items));
 
-        $itemIds = $this->getItemPageIds($items);
         // we index this item
-        $this->indexPageIds($itemIds);
+        $this->indexPageIds([1]);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove content hidden by endtime in past');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
     }
@@ -351,7 +350,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index a page with two content elements and expect solr contains the content of both
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('Will stay after update!', $solrContent, 'solr did not contain rendered page content, which is needed for test.');
 
         // we hide the second content element
@@ -372,21 +371,21 @@ class GarbageCollectorTest extends IntegrationTest
         $this->dataHandler->clear_cacheCmd('all');
 
         // document should stay in the index, because endtime was not in past but empty
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('Will stay after update!', $solrContent, 'solr did not contain rendered page content, which is needed for test.');
 
         $this->waitToBeVisibleInSolr();
-        
+
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
+        $this->assertSame(1, count($items));
 
         // we index this item
-        $itemIds = $this->getItemPageIds($items);
-        $this->indexPageIds($itemIds);
+        $this->indexPageIds([1]);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('Updated! Will stay after update!', $solrContent, 'solr did not remove content hidden by endtime in past');
     }
 
@@ -403,7 +402,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index a page with two content elements and expect solr contains the content of both
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
 
@@ -431,14 +430,14 @@ class GarbageCollectorTest extends IntegrationTest
         // we expect the is one item in the indexQueue
         $this->assertIndexQueryContainsItemAmount(1);
         $items = $this->indexQueue->getItems('pages', 1);
+        $this->assertSame(1, count($items));
 
         // we index this item
-        $itemIds = $this->getItemPageIds($items);
-        $this->indexPageIds($itemIds);
+        $this->indexPageIds([1]);
         $this->waitToBeVisibleInSolr();
 
         // now the content of the deletec content element should be gone
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove content hidden by starttime in future');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
     }
@@ -457,7 +456,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index two pages and check that both are visible
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('"numFound":2', $solrContent, 'Expected to have two documents in the index');
@@ -493,7 +492,7 @@ class GarbageCollectorTest extends IntegrationTest
         $this->waitToBeVisibleInSolr();
 
         // now only one document should be left with the content of the first content element
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove content from hidden page');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('"numFound":1', $solrContent, 'Expected to have two documents in the index');
@@ -512,7 +511,7 @@ class GarbageCollectorTest extends IntegrationTest
         // we index two pages and check that both are visible
         $this->waitToBeVisibleInSolr();
 
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertContains('will be removed!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('"numFound":2', $solrContent, 'Expected to have two documents in the index');
@@ -542,7 +541,7 @@ class GarbageCollectorTest extends IntegrationTest
         $this->waitToBeVisibleInSolr();
 
         // now only one document should be left with the content of the first content element
-        $solrContent = file_get_contents('http://localhost:8999/solr/core_en/select?q=*:*');
+        $solrContent = file_get_contents($this->getSolrConnectionUriAuthority() . '/solr/core_en/select?q=*:*');
         $this->assertNotContains('will be removed!', $solrContent, 'solr did not remove content from deleted page');
         $this->assertContains('will stay!', $solrContent, 'solr did not contain rendered page content');
         $this->assertContains('"numFound":1', $solrContent, 'Expected to have two documents in the index');
@@ -606,29 +605,15 @@ class GarbageCollectorTest extends IntegrationTest
 
         return $result;
     }
-
-    /**
-     * @param $items
-     * @return array
-     */
-    protected function getItemPageIds($items):array
-    {
-        $itemIds = [];
-        foreach ($items as $item) {
-            /** @var $item Item */
-            $itemIds[] = $item->getRecordPageId();
-        }
-        return $itemIds;
-    }
+    
 
     /**
      *
      */
     protected function fakeLanguageService()
     {
-        /** @var $languageService  \TYPO3\CMS\Lang\LanguageService */
+        /** @var $languageService  \TYPO3\CMS\Core\Localization\LanguageService */
         $languageService = GeneralUtility::makeInstance(LanguageService::class);
-        $languageService->csConvObj = GeneralUtility::makeInstance(CharsetConverter::class);
         $GLOBALS['LANG'] = $languageService;
     }
 }

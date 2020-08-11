@@ -29,7 +29,6 @@ use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
  *
  * @author Frans Saris <frans@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Domain\Search\ResultSet
  */
 class ResultSetReconstitutionProcessor implements SearchResultSetProcessor
 {
@@ -63,6 +62,7 @@ class ResultSetReconstitutionProcessor implements SearchResultSetProcessor
      */
     protected function getFacetRegistry()
     {
+        // @extensionScannerIgnoreLine
         return $this->getObjectManager()->get(FacetRegistry::class);
     }
 
@@ -125,7 +125,7 @@ class ResultSetReconstitutionProcessor implements SearchResultSetProcessor
 
             $isResetOption = $field === 'relevance';
             // @todo allow stdWrap on label
-            $sorting = new Sorting($resultSet, $sortingName, $field, $direction, $label, $selected, $isResetOption);
+            $sorting = $this->getObjectManager()->get(Sorting::class, $resultSet, $sortingName, $field, $direction, $label, $selected, $isResetOption);
             $resultSet->addSorting($sorting);
         }
 
@@ -250,6 +250,7 @@ class ResultSetReconstitutionProcessor implements SearchResultSetProcessor
      */
     protected function getRequirementsService()
     {
+        // @extensionScannerIgnoreLine
         return $this->getObjectManager()->get(RequirementsService::class);
     }
 }

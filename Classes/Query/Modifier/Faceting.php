@@ -57,10 +57,9 @@ class Faceting implements Modifier, SearchRequestAware
     /**
      * @param FacetRegistry $facetRegistry
      */
-    public function __construct(FacetRegistry $facetRegistry = null)
+    public function __construct(FacetRegistry $facetRegistry)
     {
-        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
-        $this->facetRegistry = $facetRegistry ?? $objectManager->get(FacetRegistry::class);
+        $this->facetRegistry = $facetRegistry;
     }
 
     /**
@@ -154,7 +153,7 @@ class Faceting implements Modifier, SearchRequestAware
             $tag = $this->getFilterTag($facetConfiguration, $keepAllFacetsOnSelection);
             $filterParts = $this->getFilterParts($facetConfiguration, $facetName, $filterValues);
             $operator = ($facetConfiguration['operator'] === 'OR') ? ' OR ' : ' AND ';
-            $facetFilters[] = $tag . '(' . implode($operator, $filterParts) . ')';
+            $facetFilters[$facetName] = $tag . '(' . implode($operator, $filterParts) . ')';
         }
 
         return $facetFilters;

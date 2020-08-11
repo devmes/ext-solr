@@ -12,12 +12,12 @@ namespace ApacheSolrForTypo3\Solr\System\Url;
  * LICENSE.txt file that was distributed with this source code.
  *
  * The TYPO3 project - inspiring people to share!
+ */
 
 /**
  * Class UrlHelper
  *
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\System\Url
  */
 class UrlHelper {
 
@@ -107,6 +107,24 @@ class UrlHelper {
     }
 
     /**
+     * @param string $port
+     * @return UrlHelper
+     */
+    public function setPort(string $port)
+    {
+        $this->setUrlPart('port', $port);
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getPort(): string
+    {
+        return $this->getUrlPart('port');
+    }
+
+    /**
      * @param string $scheme
      * @return UrlHelper
      */
@@ -181,8 +199,9 @@ class UrlHelper {
     {
         $scheme   = isset($this->urlParts['scheme']) ? $this->urlParts['scheme'] . '://' : '';
         $host     = $this->urlParts['host'] ?? '';
-        $port     = $this->urlParts['port'] ?? '';
+        $port     = $this->urlParts['port'] ? ':' . $this->urlParts['port'] : '';
         $user     = $this->urlParts['user'] ?? '';
+        $user     = $this->urlParts['pass'] ? $user . ':' : $user;
         $pass     = $this->urlParts['pass'] ?? '';
         $pass     = ($user || $pass) ? "$pass@" : '';
         $path     = $this->urlParts['path'] ?? '';

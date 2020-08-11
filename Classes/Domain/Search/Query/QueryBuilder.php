@@ -31,7 +31,6 @@ use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\FieldCollapsing
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Filters;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Grouping;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Highlighting;
-use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Operator;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\PhraseFields;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\QueryFields;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\ReturnFields;
@@ -40,7 +39,6 @@ use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Sorting;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Sortings;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\Spellchecking;
 use ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder\TrigramPhraseFields;
-use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facets\SortingExpression;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteHashService;
 use ApacheSolrForTypo3\Solr\Domain\Site\SiteRepository;
 use ApacheSolrForTypo3\Solr\FieldProcessor\PageUidToHierarchy;
@@ -52,8 +50,6 @@ use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 
 /**
  * The concrete QueryBuilder contains all TYPO3 specific initialization logic of solr queries, for TYPO3.
- *
- * @package ApacheSolrForTypo3\Solr\Domain\Search\Query
  */
 class QueryBuilder extends AbstractQueryBuilder {
 
@@ -577,7 +573,6 @@ class QueryBuilder extends AbstractQueryBuilder {
         $query->setQuery($rawQuery);
         return $query;
     }
-
 
     /**
      * @param string $rawQuery

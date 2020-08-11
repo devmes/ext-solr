@@ -199,6 +199,7 @@ class Page extends AbstractInitializer
                 'Failed to initialize Mount Page tree. ',
                 FlashMessage::ERROR
             );
+            // @extensionScannerIgnoreLine
             $this->flashMessageQueue->addMessage($flashMessage);
         }
 
@@ -215,6 +216,7 @@ class Page extends AbstractInitializer
                 'Failed to initialize Mount Page tree. ',
                 FlashMessage::ERROR
             );
+            // @extensionScannerIgnoreLine
             $this->flashMessageQueue->addMessage($flashMessage);
         }
 
@@ -335,6 +337,6 @@ class Page extends AbstractInitializer
         /* @var $siteRepository SiteRepository */
         $mountedSite = $siteRepository->getSiteByPageId($mountPageSourceId, $mountPageIdentifier);
 
-        return $mountedSite->getPages($mountPageSourceId);
+        return $mountedSite ? $mountedSite->getPages($mountPageSourceId) : [];
     }
 }

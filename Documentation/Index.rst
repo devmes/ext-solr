@@ -5,8 +5,11 @@
 
 .. include:: Includes.txt
 
-
 .. _start:
+
+================================
+Apache Solr for TYPO3 (EXT:solr)
+================================
 
 .. only:: html
 
@@ -14,7 +17,7 @@
 		solr
 
 	:Version:
-		10.0.0-dev
+		11.1.x-dev
 
 	:Language:
 		en

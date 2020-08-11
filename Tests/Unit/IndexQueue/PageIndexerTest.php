@@ -100,7 +100,7 @@ class PageIndexerTest extends UnitTest
                     $this->solrLogManagerMock,
                     $this->connectionManagerMock
                 ])
-            ->setMethods(['getPageIndexerRequest', 'getSystemLanguages', 'getAccessRootlineByPageId', 'getUriStrategy'])
+            ->setMethods(['getPageIndexerRequest', 'getAccessRootlineByPageId', 'getUriStrategy'])
             ->getMock();
         $pageIndexer->expects($this->any())->method('getPageIndexerRequest')->willReturn($this->pageIndexerRequestMock);
         $pageIndexer->expects($this->any())->method('getUriStrategy')->willReturn($this->uriStrategyMock);
@@ -112,14 +112,15 @@ class PageIndexerTest extends UnitTest
      */
     public function testIndexPageItemIsSendingFrontendRequestsToExpectedUrls()
     {
-        $this->connectionManagerMock->expects($this->once())->method('getConfigurationsBySite')->willReturn([
+        $GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS']['solr'] = [];
+        $siteMock = $this->getDumbMock(Site::class);
+        $siteMock->expects($this->once())->method('getAllSolrConnectionConfigurations')->willReturn([
             ['rootPageUid' => 88, 'language' => 0]
         ]);
-        $siteMock = $this->getDumbMock(Site::class);
+
         $siteMock->expects($this->any())->method('getRootPageId')->willReturn(88);
         $siteMock->expects($this->any())->method('getRootPage')->willReturn(['l18n_cfg' => 0, 'title' => 'mysiteroot']);
 
-        $urlHelperMock = $this->getDumbMock(UrlHelper::class);
         $testUri = 'http://myfrontendurl.de/index.php?id=4711&L=0';
         $this->uriStrategyMock->expects($this->any())->method('getPageIndexingUriFromPageItemAndLanguageId')->willReturn($testUri);
 
@@ -141,7 +142,6 @@ class PageIndexerTest extends UnitTest
         );
 
         $pageIndexer = $this->getPageIndexerWithMockedDependencies([]);
-        $pageIndexer->expects($this->any())->method('getSystemLanguages')->willReturn([]);
         $pageRootLineMock = $this->getDumbMock(Rootline::class);
         $pageIndexer->expects($this->once())->method('getAccessRootlineByPageId')->willReturn($pageRootLineMock);
 

@@ -30,8 +30,6 @@ use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 /**
  * The Grouping ParameterProvider is responsible to build the solr query parameters
  * that are needed for the grouping.
- *
- * @package ApacheSolrForTypo3\Solr\Domain\Search\Query\ParameterBuilder
  */
 class Grouping extends AbstractDeactivatable implements ParameterBuilder
 {
@@ -246,6 +244,8 @@ class Grouping extends AbstractDeactivatable implements ParameterBuilder
         $query->getGrouping()->setQueries($this->getQueries());
         $query->getGrouping()->setFormat('grouped');
         $query->getGrouping()->setNumberOfGroups(true);
+
+        $query->setRows($this->getNumberOfGroups());
 
         $sorting = implode(' ', $this->getSortings());
         $query->getGrouping()->setSort($sorting);

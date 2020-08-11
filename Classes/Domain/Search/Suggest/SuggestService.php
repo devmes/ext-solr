@@ -36,6 +36,7 @@ use ApacheSolrForTypo3\Solr\Domain\Search\SearchRequest;
 use ApacheSolrForTypo3\Solr\Search;
 use ApacheSolrForTypo3\Solr\System\Configuration\TypoScriptConfiguration;
 use ApacheSolrForTypo3\Solr\System\Solr\ParsingUtil;
+use ApacheSolrForTypo3\Solr\Util;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
@@ -44,7 +45,6 @@ use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
  *
  * @author Frans Saris <frans.saris@beech.it>
  * @author Timo Hund <timo.hund@dkd.de>
- * @package ApacheSolrForTypo3\Solr\Domain\Search\Suggest
  */
 class SuggestService {
 
@@ -92,7 +92,7 @@ class SuggestService {
     public function getSuggestions(SearchRequest $searchRequest, array $additionalFilters = []) : array
     {
         $requestId = (int)$this->tsfe->getRequestedId();
-        $groupList = (string)$this->tsfe->gr_list;
+        $groupList = Util::getFrontendUserGroupsList();
 
         $suggestQuery = $this->queryBuilder->buildSuggestQuery($searchRequest->getRawUserQuery(), $additionalFilters, $requestId, $groupList);
         $solrSuggestions = $this->getSolrSuggestions($suggestQuery);
@@ -163,7 +163,7 @@ class SuggestService {
     protected function getSolrSuggestions(SuggestQuery $suggestQuery) : array
     {
         $pageId = $this->tsfe->getRequestedId();
-        $languageId = $this->tsfe->sys_language_uid;
+        $languageId = Util::getLanguageUid();
         $solr = GeneralUtility::makeInstance(ConnectionManager::class)->getConnectionByPageId($pageId, $languageId);
         $search = GeneralUtility::makeInstance(Search::class, /** @scrutinizer ignore-type */ $solr);
         $response = $search->search($suggestQuery, 0, 0);
@@ -239,7 +239,7 @@ class SuggestService {
             'title' => $document->getTitle(),
             'content' => $document->getContent(),
             'group' => $document->getHasGroupItem() ? $document->getGroupItem()->getGroupValue() : '',
-            'previewImage' => $document['previewImage_stringS'] ? $document['previewImage_stringS'] : '',
+            'previewImage' => $document['image'] ? $document['image'] : '',
         ];
         foreach ($additionalTopResultsFields as $additionalTopResultsField) {
             $fields[$additionalTopResultsField] = $document[$additionalTopResultsField] ? $document[$additionalTopResultsField] : '';

@@ -34,11 +34,7 @@ use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\Facets\OptionBased\QueryGrou
 use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\ResultSetReconstitutionProcessor;
 use ApacheSolrForTypo3\Solr\Domain\Search\ResultSet\SearchResultSet;
 use ApacheSolrForTypo3\Solr\Tests\Unit\Helper\FakeObjectManager;
-use TYPO3\CMS\Core\TimeTracker\TimeTracker;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
-use TYPO3\CMS\Frontend\ContentObject\CaseContentObject;
-use TYPO3\CMS\Frontend\ContentObject\TextContentObject;
+use ApacheSolrForTypo3\Solr\Util;
 
 /**
  * Unit test case for the ObjectReconstitutionProcessor.
@@ -108,7 +104,6 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         $configuration = $this->getConfigurationArrayFromFacetConfigurationArray($facetConfiguration);
         $processor = $this->getConfiguredReconstitutionProcessor($configuration, $searchResultSet);
         $processor->process($searchResultSet);
-
         // after the reconstitution they should be 1 facet present
         $this->assertCount(1, $searchResultSet->getFacets());
     }
@@ -144,7 +139,9 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
 
         /** @var $optionFacet OptionsFacet */
         $optionFacet = $searchResultSet->getFacets()->getByPosition(0);
+        // @extensionScannerIgnoreLine
         $this->assertSame('tx_myext_domain_model_mytype', $optionFacet->getOptions()->getByPosition(0)->getValue(), 'Custom type facet not found');
+        // @extensionScannerIgnoreLine
         $this->assertSame(19, $optionFacet->getOptions()->getByPosition(0)->getDocumentCount(), 'Custom type facet count not correct');
     }
 
@@ -211,7 +208,9 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
 
             /** @var $optionFacet OptionsFacet */
         $optionFacet = $searchResultSet->getFacets()->getByPosition(0);
+        // @extensionScannerIgnoreLine
         $this->assertCount(1, $optionFacet->getOptions());
+        // @extensionScannerIgnoreLine
         $this->assertSame('event', $optionFacet->getOptions()->getByPosition(0)->getValue(), 'Skipping configured value not working as expected');
     }
 
@@ -335,11 +334,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var $optionFacet OptionsFacet */
         $optionFacet = $searchResultSet->getFacets()->getByPosition(0);
 
-        /** @var $option1 Option */
+        /** @var $option1 Option */ // @extensionScannerIgnoreLine
         $option1 = $optionFacet->getOptions()->getByPosition(0);
         $this->assertSame('page', $option1->getValue());
 
-        /** @var $option2 Option */
+        /** @var $option2 Option */ // @extensionScannerIgnoreLine
         $option2 = $optionFacet->getOptions()->getByPosition(1);
         $this->assertSame('event', $option2->getValue());
     }
@@ -372,11 +371,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var $optionFacet OptionsFacet */
         $optionFacet = $searchResultSet->getFacets()->getByPosition(0);
 
-        /** @var $option1 Option */
+        /** @var $option1 Option */ // @extensionScannerIgnoreLine
         $option1 = $optionFacet->getOptions()->getByPosition(0);
         $this->assertSame('event', $option1->getValue());
 
-        /** @var $option2 Option */
+        /** @var $option2 Option */ // @extensionScannerIgnoreLine
         $option2 = $optionFacet->getOptions()->getByPosition(1);
         $this->assertSame('page', $option2->getValue());
     }
@@ -410,11 +409,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var $optionFacet OptionsFacet */
         $optionFacet = $searchResultSet->getFacets()->getByPosition(0);
 
-        /** @var $option1 Option */
+        /** @var $option1 Option */ // @extensionScannerIgnoreLine
         $option1 = $optionFacet->getOptions()->getByPosition(0);
         $this->assertSame('event', $option1->getValue());
 
-        /** @var $option2 Option */
+        /** @var $option2 Option */ // @extensionScannerIgnoreLine
         $option2 = $optionFacet->getOptions()->getByPosition(1);
         $this->assertSame('page', $option2->getValue());
     }
@@ -630,7 +629,7 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var OptionsFacet $facet1 */
         $facet1 = $facets->getByPosition(0);
 
-        /** @var $firstOption Option */
+        /** @var $firstOption Option */ // @extensionScannerIgnoreLine
         $firstOption = $facet1->getOptions()->getByPosition(0);
         $this->assertEquals('pages', $firstOption->getValue());
         $this->assertEquals(5, $firstOption->getDocumentCount());
@@ -678,7 +677,7 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var OptionsFacet $facet1 */
         $facet1 = $facets->getByPosition(0);
 
-        /** @var $firstOption Option */
+        /** @var $firstOption Option */ // @extensionScannerIgnoreLine
         $firstOption = $facet1->getOptions()->getByPosition(0);
         $this->assertEquals('jpeg', $firstOption->getValue());
         $this->assertEquals(1, $firstOption->getDocumentCount());
@@ -881,6 +880,7 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         $facet = $facets->getByPosition(0);
         $this->assertInstanceOf(QueryGroupFacet::class, $facet);
 
+        // @extensionScannerIgnoreLine
         $this->assertCount(3, $facet->getOptions());
     }
 
@@ -919,8 +919,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var QueryGroupFacet $facet */
         $facet = $searchResultSet->getFacets()->getByPosition(0);
 
+        // @extensionScannerIgnoreLine
         $firstValue = $facet->getOptions()->getByPosition(0)->getValue();
+        // @extensionScannerIgnoreLine
         $secondValue = $facet->getOptions()->getByPosition(1)->getValue();
+        // @extensionScannerIgnoreLine
         $thirdValue = $facet->getOptions()->getByPosition(2)->getValue();
 
         $this->assertSame('month', $firstValue, 'Could not get values in expected order from QueryGroupFacet');
@@ -964,8 +967,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var QueryGroupFacet $facet */
         $facet = $searchResultSet->getFacets()->getByPosition(0);
 
+        // @extensionScannerIgnoreLine
         $firstValue = $facet->getOptions()->getByPosition(0)->getValue();
+        // @extensionScannerIgnoreLine
         $secondValue = $facet->getOptions()->getByPosition(1)->getValue();
+        // @extensionScannerIgnoreLine
         $thirdValue = $facet->getOptions()->getByPosition(2)->getValue();
 
         $this->assertSame('halfYear', $firstValue, 'Could not get values in expected order from QueryGroupFacet');
@@ -1009,8 +1015,11 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         /** @var QueryGroupFacet $facet */
         $facet = $searchResultSet->getFacets()->getByPosition(0);
 
+        // @extensionScannerIgnoreLine
         $firstValue = $facet->getOptions()->getByPosition(0)->getValue();
+        // @extensionScannerIgnoreLine
         $secondValue = $facet->getOptions()->getByPosition(1)->getValue();
+        // @extensionScannerIgnoreLine
         $thirdValue = $facet->getOptions()->getByPosition(2)->getValue();
 
         $this->assertSame('old', $firstValue, 'Could not get values in expected order from QueryGroupFacet');
@@ -1109,7 +1118,13 @@ class ResultSetReconstitutionProcessorTest extends UnitTest
         $searchResultSet->getUsedSearchRequest()->expects($this->any())->method('getActiveFacetNames')->will($this->returnValue([]));
 
         $processor = new ResultSetReconstitutionProcessor();
-        $processor->setObjectManager(new FakeObjectManager());
+
+        if(Util::getIsTYPO3VersionBelow10()) {
+            $fakeObjectManager = new \ApacheSolrForTypo3\Solr\Tests\Unit\Helper\LegacyFakeObjectManager();
+        } else {
+            $fakeObjectManager = new \ApacheSolrForTypo3\Solr\Tests\Unit\Helper\FakeObjectManager();
+        }
+        $processor->setObjectManager($fakeObjectManager);
         return $processor;
     }
 }

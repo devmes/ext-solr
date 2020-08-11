@@ -76,7 +76,7 @@ class TypoScriptConfiguration
     /**
      * @var ContentObjectService
      */
-    protected $contentObjectService;
+    protected $contentObjectService = null;
 
     /**
      * @param array $configuration
@@ -87,7 +87,7 @@ class TypoScriptConfiguration
     {
         $this->configurationAccess = new ArrayAccessor($configuration, '.', true);
         $this->contextPageId = $contextPageId;
-        $this->contentObjectService = $contentObjectService ?? GeneralUtility::makeInstance(ContentObjectService::class);
+        $this->contentObjectService = $contentObjectService;
     }
 
     /**
@@ -444,10 +444,6 @@ class TypoScriptConfiguration
         foreach ($indexingConfigurations as $indexingConfigurationName) {
             $monitoredTable = $this->getIndexQueueTableNameOrFallbackToConfigurationName($indexingConfigurationName);
             $monitoredTables[] = $monitoredTable;
-            if ($monitoredTable === 'pages') {
-                // when monitoring pages, also monitor creation of translations
-                $monitoredTables[] = 'pages_language_overlay';
-            }
         }
 
         return array_values(array_unique($monitoredTables));
@@ -903,159 +899,6 @@ class TypoScriptConfiguration
     {
         $result = $this->getValueByPathOrDefaultValue('plugin.tx_solr.enableDebugMode', $defaultIfEmpty);
         return $this->getBool($result);
-    }
-
-    /**
-     * Returns true or false if something is configured below plugin.tx_solr.solr.
-     *
-     * plugin.tx_solr.solr.
-     *
-     * @param boolean $defaultIfEmpty
-     * @return boolean
-     */
-    public function getSolrHasConnectionConfiguration($defaultIfEmpty = false)
-    {
-        $configuration = $this->getObjectByPathOrDefault('plugin.tx_solr.solr.', []);
-        return $configuration !== [] ? true : $defaultIfEmpty;
-    }
-
-    /**
-     * Returns the defaultTimeout used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.timeout
-     *
-     * @param int $defaultIfEmpty
-     * @return int
-     */
-    public function getSolrTimeout($defaultIfEmpty = 0, $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.timeout';
-        $fallbackPath = 'plugin.tx_solr.solr.timeout';
-        $result = (int)$this->getValueByPathOrDefaultValue($scopePath, -1);
-        if($result !== -1) {
-            return $result;
-        }
-
-        return (int)$this->getValueByPathOrDefaultValue($fallbackPath, $defaultIfEmpty);
-    }
-
-    /**
-     * Returns the scheme used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.scheme
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param string $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return string
-     */
-    public function getSolrScheme($defaultIfEmpty = 'http', $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.scheme';
-        $fallbackPath = 'plugin.tx_solr.solr.scheme';
-
-        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
-    }
-
-    /**
-     * Returns the hostname used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.host
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param string $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return string
-     */
-    public function getSolrHost($defaultIfEmpty = 'localhost', $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.host';
-        $fallbackPath = 'plugin.tx_solr.solr.host';
-
-        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
-    }
-
-    /**
-     * Returns the port used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.port
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param int $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return int
-     */
-    public function getSolrPort($defaultIfEmpty = 8983, $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.port';
-        $fallbackPath = 'plugin.tx_solr.solr.port';
-
-        return (int)$this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
-    }
-
-    /**
-     * Returns the path used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.path
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param string $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return string
-     */
-    public function getSolrPath($defaultIfEmpty = '/solr/core_en/', $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.path';
-        $fallbackPath = 'plugin.tx_solr.solr.path';
-
-        $solrPath =  $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
-
-        $solrPath = trim($solrPath, '/');
-        $solrPath = '/' . $solrPath . '/';
-
-        return $solrPath;
-    }
-
-    /**
-     * Returns the username used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.username
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param string $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return string
-     */
-    public function getSolrUsername($defaultIfEmpty = '', $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.username';
-        $fallbackPath = 'plugin.tx_solr.solr.username';
-
-        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
-    }
-
-    /**
-     * Returns the password used for requests to the Solr server
-     *
-     * plugin.tx_solr.solr.password
-     *
-     * Applies stdWrap on the configured setting
-     *
-     * @param string $defaultIfEmpty
-     * @param string $scope read or write, read by default
-     * @return string
-     */
-    public function getSolrPassword($defaultIfEmpty = '', $scope = 'read')
-    {
-        $scopePath = 'plugin.tx_solr.solr.' . $scope . '.password';
-        $fallbackPath = 'plugin.tx_solr.solr.password';
-
-        return $this->getValueByPathWithFallbackOrDefaultValueAndApplyStdWrap($scopePath, $fallbackPath, $defaultIfEmpty);
     }
 
     /**
@@ -2412,7 +2255,9 @@ class TypoScriptConfiguration
         if ($configuration == null) {
             return $value;
         }
-
+        if ($this->contentObjectService === null) {
+            $this->contentObjectService = GeneralUtility::makeInstance(ContentObjectService::class);
+        }
         return $this->contentObjectService->renderSingleContentObject($value, $configuration);
     }
 }
